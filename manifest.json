@@ -1,0 +1,17 @@
+{
+  "name": "FutRaiz",
+  "short_name": "FutRaiz",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0a0f1d",
+  "theme_color": "#0a0f1d",
+  "orientation": "portrait-primary",
+  "description": "Aplicativo completo para organização de futebol com amigos",
+  "icons": [
+    {
+      "src": "./assets/icons/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}

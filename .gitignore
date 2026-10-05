@@ -1,0 +1,30 @@
+# Sistema
+node_modules/
+.DS_Store
+Thumbs.db
+
+# Ambiente
+.env
+.env.*
+!.env.example
+
+# Temporários
+.temp_edge_audit*/
+*.tmp
+*.log
+
+# Screenshots e auditorias
+screenshots/
+screenshots*/
+*_screenshots/
+visual_audit*/
+responsive_audit*/
+
+# Cache
+.cache/
+.vscode/
+.idea/
+
+# Arquivos gerados
+dist/
+build/

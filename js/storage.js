@@ -1,0 +1,1778 @@
+/**
+ * Storage Layer - Familia do Fut Multi-Tenant
+ * Abstração de persistência dos dados conectada ao Supabase com controle RLS
+ * e isolamento estrito entre múltiplos futebóis independentes.
+ */
+
+import { supabase } from './supabaseClient.js';
+import { Utils } from './utils.js';
+
+const _memoryStore = {
+  _data: {},
+  getItem(k) { return this._data[k] || null; },
+  setItem(k, v) { this._data[k] = String(v); },
+  removeItem(k) { delete this._data[k]; },
+  clear() { this._data = {}; }
+};
+
+function getStorage() {
+  if (typeof localStorage !== 'undefined') return localStorage;
+  if (typeof global !== 'undefined' && global.localStorage) return global.localStorage;
+  if (typeof window !== 'undefined' && window.localStorage) return window.localStorage;
+  return _memoryStore;
+}
+
+const store = {
+  getItem: (k) => getStorage().getItem(k),
+  setItem: (k, v) => getStorage().setItem(k, v),
+  removeItem: (k) => getStorage().removeItem(k),
+  clear: () => getStorage().clear()
+};
+
+const STORAGE_KEYS = {
+  CURRENT_FUTEBOL: 'familia_fut_active_futebol',
+  USER_ROLE: 'familia_fut_user_role', // 'ADMIN' ou 'PUBLIC_VIEWER'
+  LIVE_MATCH: 'partida_ao_vivo'
+};
+
+const DEFAULT_COLORS = {
+  time_1: '#2563eb', // Azul
+  time_2: '#dc2626', // Vermelho
+  time_3: '#16a34a', // Verde
+  time_4: '#eab308'  // Amarelo
+};
+
+export const Storage = {
+  currentFutebol: null, // { id, codigo_publico, nome, admin_id }
+  userRole: null, // 'ADMIN' | 'PUBLIC_VIEWER'
+  realtimeSubscription: null,
+
+  init() {
+    this.restoreSession();
+  },
+
+  restoreSession() {
+    try {
+      const savedFut = store.getItem(STORAGE_KEYS.CURRENT_FUTEBOL);
+      if (savedFut) {
+        this.currentFutebol = JSON.parse(savedFut);
+      }
+      this.userRole = store.getItem(STORAGE_KEYS.USER_ROLE) || 'PUBLIC_VIEWER';
+      if (this.currentFutebol) {
+        this.setupRealtime(this.currentFutebol.id);
+      }
+    } catch (e) {
+      console.warn('Erro ao restaurar sessão de futebol:', e);
+      this.currentFutebol = null;
+      this.userRole = null;
+    }
+  },
+
+  // Retorna a chave de armazenamento isolada para o futebol atual
+  _getScopedKey(suffix) {
+    const futId = this.currentFutebol ? this.currentFutebol.id : 'global';
+    return `fut_${futId}_${suffix}`;
+  },
+
+  // Validação estrita de permissão (segurança no frontend + RLS no backend)
+  assertAdmin(actionName = 'Esta operação') {
+    if (this.userRole !== 'ADMIN') {
+      const err = new Error(`Permissão Negada: Usuário público em modo somente leitura não pode executar: ${actionName}`);
+      console.error(err.message);
+      throw err;
+    }
+  },
+
+  isPublicViewer() {
+    return this.userRole === 'PUBLIC_VIEWER';
+  },
+
+  isAdmin() {
+    return this.userRole === 'ADMIN';
+  },
+
+  // Gera código público exclusivo no padrão FDT-XXXX
+  generatePublicCode() {
+    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+    let code = '';
+    for (let i = 0; i < 4; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return `FDT-${code}`;
+  },
+
+  // ============================================================================
+  // MULTI-FUTEBOL: CRIAÇÃO, ACESSO E AUTENTICAÇÃO
+  // ============================================================================
+
+  /**
+   * Cria um novo futebol independente com administrador vinculado
+   */
+  async createFutebol({ nome, adminNome, email, password }) {
+    try {
+      // 1. Cria usuário no Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: email.trim(),
+        password: password,
+        options: {
+          data: { name: adminNome.trim() }
+        }
+      });
+
+      if (authError) {
+        throw new Error(authError.message);
+      }
+
+      const user = authData.user;
+      if (!user) throw new Error('Não foi possível obter o identificador do administrador.');
+
+      // 2. Gera código público exclusivo (ex: FDT-7K29)
+      const codigoPublico = this.generatePublicCode();
+
+      // 3. Registra o futebol no Supabase (padrão 7 minutos = 420 segundos)
+      const futebolRecord = {
+        id: Utils.generateId('fut'),
+        codigo_publico: codigoPublico,
+        nome: nome.trim(),
+        admin_id: user.id,
+        default_match_duration_seconds: 420,
+        historico_inicial_aberto: true,
+        created_at: new Date().toISOString()
+      };
+
+      const { data: futData, error: futError } = await supabase
+        .from('futebois')
+        .insert([futebolRecord]);
+
+      if (futError) throw new Error(futError.message);
+
+      // 4. Vincula na tabela de administradores do futebol
+      const adminLink = {
+        futebol_id: futebolRecord.id,
+        user_id: user.id,
+        role: 'admin',
+        created_at: new Date().toISOString()
+      };
+
+      await supabase.from('futebol_admins').insert([adminLink]);
+
+      // 5. Define sessão ativa como Administrador
+      this.currentFutebol = futebolRecord;
+      this.userRole = 'ADMIN';
+      store.setItem(STORAGE_KEYS.CURRENT_FUTEBOL, JSON.stringify(futebolRecord));
+      store.setItem(STORAGE_KEYS.USER_ROLE, 'ADMIN');
+
+      this.setupRealtime(futebolRecord.id);
+      this._emitChange('futebolCreated', futebolRecord);
+      return { success: true, futebol: futebolRecord };
+    } catch (err) {
+      console.error('Erro ao criar futebol:', err);
+      return { success: false, error: err.message };
+    }
+  },
+
+  getDefaultMatchDurationMinutes() {
+    if (this.currentFutebol && this.currentFutebol.default_match_duration_seconds) {
+      return Math.floor(this.currentFutebol.default_match_duration_seconds / 60);
+    }
+    return 7;
+  },
+
+  getDefaultMatchDurationSeconds() {
+    if (this.currentFutebol && this.currentFutebol.default_match_duration_seconds) {
+      return this.currentFutebol.default_match_duration_seconds;
+    }
+    return 420;
+  },
+
+  async updateFutebolSettings({ nome, default_match_duration_seconds }) {
+    this.assertAdmin('Atualizar configurações do futebol');
+    if (!this.currentFutebol) throw new Error('Nenhum futebol ativo.');
+
+    const updatedFut = { ...this.currentFutebol };
+    if (nome && nome.trim()) updatedFut.nome = nome.trim();
+    if (default_match_duration_seconds !== undefined) {
+      updatedFut.default_match_duration_seconds = parseInt(default_match_duration_seconds, 10) || 420;
+    }
+
+    this.currentFutebol = updatedFut;
+    store.setItem(STORAGE_KEYS.CURRENT_FUTEBOL, JSON.stringify(updatedFut));
+
+    // Sincroniza com Supabase
+    try {
+      await supabase.from('futebois').update({
+        nome: updatedFut.nome,
+        default_match_duration_seconds: updatedFut.default_match_duration_seconds
+      }).eq('id', updatedFut.id);
+    } catch (e) {
+      console.warn('Sync futebol settings error:', e);
+    }
+
+    this._emitChange('futebolUpdated', updatedFut);
+    return { success: true, futebol: updatedFut };
+  },
+
+  /**
+   * Login do Administrador
+   */
+  async loginAdmin({ email, password }) {
+    try {
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password
+      });
+
+      if (authError) throw new Error(authError.message);
+
+      const user = authData.user;
+      // Busca futebóis onde o usuário é administrador
+      const { data: adminLinks } = await supabase
+        .from('futebol_admins')
+        .select('*')
+        .eq('user_id', user.id);
+
+      let targetFutebol = null;
+      if (adminLinks && adminLinks.length > 0) {
+        const futId = adminLinks[0].futebol_id;
+        const { data: fut } = await supabase
+          .from('futebois')
+          .select('*')
+          .eq('id', futId)
+          .single();
+        targetFutebol = fut;
+      } else {
+        // Fallback por admin_id direto
+        const { data: fut } = await supabase
+          .from('futebois')
+          .select('*')
+          .eq('admin_id', user.id)
+          .single();
+        targetFutebol = fut;
+      }
+
+      if (!targetFutebol) {
+        throw new Error('Nenhum futebol associado a este usuário administrador.');
+      }
+
+      this.currentFutebol = targetFutebol;
+      this.userRole = 'ADMIN';
+      store.setItem(STORAGE_KEYS.CURRENT_FUTEBOL, JSON.stringify(targetFutebol));
+      store.setItem(STORAGE_KEYS.USER_ROLE, 'ADMIN');
+
+      this.setupRealtime(targetFutebol.id);
+      await this.syncPlayersFromSupabase(targetFutebol.id);
+      await this.syncCapasFromSupabase(targetFutebol.id);
+      await this.syncMatchesFromSupabase(targetFutebol.id);
+      await this.syncRoundsFromSupabase(targetFutebol.id);
+      await this.syncStandingsSnapshotsFromSupabase(targetFutebol.id);
+      this._emitChange('authChanged', targetFutebol);
+      return { success: true, futebol: targetFutebol };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  /**
+   * Acesso Público (Somente Leitura) via ID/Código Público
+   */
+  async loadPublicFutebol(codigoPublico) {
+    try {
+      const cleanCode = (codigoPublico || '').toUpperCase().trim();
+      const { data: futebol, error } = await supabase
+        .from('futebois')
+        .select('*')
+        .eq('codigo_publico', cleanCode)
+        .single();
+
+      if (error || !futebol) {
+        return { success: false, error: 'Futebol não encontrado.' };
+      }
+
+      // Desconecta auth de admin caso estivesse em outro
+      await supabase.auth.signOut();
+
+      this.currentFutebol = futebol;
+      this.userRole = 'PUBLIC_VIEWER';
+      store.setItem(STORAGE_KEYS.CURRENT_FUTEBOL, JSON.stringify(futebol));
+      store.setItem(STORAGE_KEYS.USER_ROLE, 'PUBLIC_VIEWER');
+
+      this.setupRealtime(futebol.id);
+      await this.syncPlayersFromSupabase(futebol.id);
+      await this.syncCapasFromSupabase(futebol.id);
+      await this.syncMatchesFromSupabase(futebol.id);
+      await this.syncRoundsFromSupabase(futebol.id);
+      await this.syncStandingsSnapshotsFromSupabase(futebol.id);
+      this._emitChange('publicFutebolLoaded', futebol);
+      return { success: true, futebol };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  async logout() {
+    try {
+      await supabase.auth.signOut();
+    } catch {}
+    this.currentFutebol = null;
+    this.userRole = null;
+    store.removeItem(STORAGE_KEYS.CURRENT_FUTEBOL);
+    store.removeItem(STORAGE_KEYS.USER_ROLE);
+    this._emitChange('logout', null);
+  },
+
+  async syncMatchFromSupabase(dbMatch) {
+    if (!dbMatch) return;
+    const matches = this.getMatches();
+    const existingIdx = matches.findIndex(m => m.id === dbMatch.id);
+    const localMatch = {
+      id: dbMatch.id,
+      roundId: dbMatch.rodada_id,
+      homeTeamId: dbMatch.time_casa_id,
+      awayTeamId: dbMatch.time_fora_id,
+      homeTeamName: dbMatch.time_casa_nome,
+      awayTeamName: dbMatch.time_fora_nome,
+      homeScore: dbMatch.placar_casa,
+      awayScore: dbMatch.placar_fora,
+      status: dbMatch.status || 'finalizada',
+      isTie: dbMatch.placar_casa === dbMatch.placar_fora,
+      winner: dbMatch.placar_casa > dbMatch.placar_fora ? dbMatch.time_casa_id : (dbMatch.placar_fora > dbMatch.placar_casa ? dbMatch.time_fora_id : null),
+      loser: dbMatch.placar_casa > dbMatch.placar_fora ? dbMatch.time_fora_id : (dbMatch.placar_fora > dbMatch.placar_casa ? dbMatch.time_casa_id : null),
+      dateKey: Utils.getDateKey(new Date(dbMatch.created_at || Date.now())),
+      createdAt: dbMatch.created_at || new Date().toISOString()
+    };
+
+    if (existingIdx !== -1) {
+      matches[existingIdx] = { ...matches[existingIdx], ...localMatch };
+    } else {
+      matches.unshift(localMatch);
+    }
+    const key = this._getScopedKey('matches');
+    store.setItem(key, JSON.stringify(matches));
+  },
+
+  async syncMatchesFromSupabase(futebolId) {
+    if (!futebolId) return;
+    try {
+      const { data: dbMatches } = await supabase
+        .from('partidas')
+        .select('*')
+        .eq('futebol_id', futebolId)
+        .order('created_at', { ascending: false });
+
+      if (dbMatches && Array.isArray(dbMatches)) {
+        const matches = this.getMatches();
+        dbMatches.forEach(dbMatch => {
+          const exists = matches.some(m => m.id === dbMatch.id);
+          if (!exists) {
+            matches.push({
+              id: dbMatch.id,
+              roundId: dbMatch.rodada_id,
+              homeTeamId: dbMatch.time_casa_id,
+              awayTeamId: dbMatch.time_fora_id,
+              homeTeamName: dbMatch.time_casa_nome,
+              awayTeamName: dbMatch.time_fora_nome,
+              homeScore: dbMatch.placar_casa,
+              awayScore: dbMatch.placar_fora,
+              status: dbMatch.status || 'finalizada',
+              isTie: dbMatch.placar_casa === dbMatch.placar_fora,
+              winner: dbMatch.placar_casa > dbMatch.placar_fora ? dbMatch.time_casa_id : (dbMatch.placar_fora > dbMatch.placar_casa ? dbMatch.time_fora_id : null),
+              loser: dbMatch.placar_casa > dbMatch.placar_fora ? dbMatch.time_fora_id : (dbMatch.placar_fora > dbMatch.placar_casa ? dbMatch.time_casa_id : null),
+              dateKey: Utils.getDateKey(new Date(dbMatch.created_at || Date.now())),
+              createdAt: dbMatch.created_at || new Date().toISOString()
+            });
+          }
+        });
+        const key = this._getScopedKey('matches');
+        store.setItem(key, JSON.stringify(matches));
+      }
+    } catch (err) {
+      console.warn('Sync matches error:', err);
+    }
+  },
+
+  async syncRoundsFromSupabase(futebolId) {
+    if (!futebolId) return;
+    try {
+      const { data: dbRounds } = await supabase
+        .from('rodadas')
+        .select('*')
+        .eq('futebol_id', futebolId)
+        .order('created_at', { ascending: false });
+
+      if (dbRounds && Array.isArray(dbRounds)) {
+        const rounds = this.getRounds();
+        dbRounds.forEach(dr => {
+          const existingIdx = rounds.findIndex(r => r.id === dr.id);
+          const roundObj = {
+            id: dr.id,
+            futebolId: dr.futebol_id,
+            numero: dr.numero,
+            date: dr.data ? Utils.formatDate(new Date(dr.data + 'T12:00:00')) : '',
+            dateKey: dr.data,
+            status: dr.status,
+            campeaoTimeId: dr.campeao_time_id,
+            campeaoTimeNome: dr.campeao_time_nome,
+            programacao: dr.programacao,
+            standingsSnapshot: dr.standings_snapshot || null,
+            createdAt: dr.created_at
+          };
+          if (existingIdx >= 0) {
+            rounds[existingIdx] = { ...rounds[existingIdx], ...roundObj };
+          } else {
+            rounds.push(roundObj);
+          }
+        });
+        const key = this._getScopedKey('rounds');
+        store.setItem(key, JSON.stringify(rounds || []));
+        this._emitChange('rounds', rounds);
+
+        // Se houver rodada ATIVA ou PRONTA, define como current_round caso não haja
+        const activeDbRound = dbRounds.find(r => r.status === 'ACTIVE' || r.status === 'READY');
+        if (activeDbRound) {
+          const current = this.getCurrentRound();
+          if (!current || current.id !== activeDbRound.id || current.status !== activeDbRound.status) {
+            const fullRound = rounds.find(r => r.id === activeDbRound.id);
+            if (fullRound) {
+              store.setItem(this._getScopedKey('current_round'), JSON.stringify(fullRound));
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[Storage] Erro ao sincronizar rodadas do Supabase:', err);
+    }
+  },
+
+  async syncStandingsSnapshotsFromSupabase(futebolId) {
+    if (!futebolId) return;
+    try {
+      const { data: dbSnapshots } = await supabase
+        .from('rodada_classificacao')
+        .select('*')
+        .eq('futebol_id', futebolId)
+        .order('posicao', { ascending: true });
+
+      if (dbSnapshots && Array.isArray(dbSnapshots) && dbSnapshots.length > 0) {
+        const grouped = {};
+        dbSnapshots.forEach(row => {
+          if (!grouped[row.rodada_id]) grouped[row.rodada_id] = [];
+          grouped[row.rodada_id].push({
+            id: row.time_id,
+            name: row.time_nome || (row.time_id === 'time_1' ? 'Time 1' : row.time_id === 'time_2' ? 'Time 2' : row.time_id === 'time_3' ? 'Time 3' : 'Time 4'),
+            j: row.jogos || 0,
+            v: row.vitorias || 0,
+            e: row.empates || 0,
+            d: row.derrotas || 0,
+            gp: row.gols_pro || 0,
+            gc: row.gols_contra || 0,
+            sg: row.saldo_gols !== undefined ? row.saldo_gols : ((row.gols_pro || 0) - (row.gols_contra || 0)),
+            pts: row.pontos || 0
+          });
+        });
+
+        const key = this._getScopedKey('rodada_classificacao');
+        let currentMap = {};
+        try {
+          currentMap = JSON.parse(store.getItem(key) || '{}');
+        } catch { currentMap = {}; }
+        Object.assign(currentMap, grouped);
+        store.setItem(key, JSON.stringify(currentMap));
+
+        // Vincula também às rodadas no histórico
+        const rounds = this.getRounds();
+        let changed = false;
+        rounds.forEach(r => {
+          if (grouped[r.id] && (!r.standingsSnapshot || r.standingsSnapshot.length === 0)) {
+            r.standingsSnapshot = grouped[r.id];
+            changed = true;
+          }
+        });
+        if (changed) {
+          const rKey = this._getScopedKey('rounds');
+          store.setItem(rKey, JSON.stringify(rounds || []));
+          this._emitChange('rounds', rounds);
+        }
+      }
+    } catch (err) {
+      console.warn('[Storage] Erro ao sincronizar snapshots de classificação:', err);
+    }
+  },
+
+  // Sincronização em tempo real via Supabase Realtime
+  setupRealtime(futebolId) {
+    if (!futebolId) return;
+    try {
+      const channel = supabase.channel(`futebol_${futebolId}`);
+      channel.on('postgres_changes', { event: '*', schema: 'public', table: 'partida_ao_vivo' }, (payload) => {
+        if (payload.new && payload.new.futebol_id === futebolId) {
+          this._saveLocalLiveMatch(payload.new);
+          this._emitChange('liveMatchUpdate', payload.new);
+        }
+      });
+      channel.on('postgres_changes', { event: '*', schema: 'public', table: 'partidas' }, async (payload) => {
+        if (payload && payload.new) {
+          await this.syncMatchFromSupabase(payload.new);
+        } else {
+          await this.syncMatchesFromSupabase(futebolId);
+        }
+        this._emitChange('matches', this.getMatches());
+      });
+      channel.on('postgres_changes', { event: '*', schema: 'public', table: 'rodadas' }, async () => {
+        await this.syncRoundsFromSupabase(futebolId);
+        this._emitChange('rounds', this.getRounds());
+      });
+      channel.on('postgres_changes', { event: '*', schema: 'public', table: 'rodada_classificacao' }, async () => {
+        await this.syncStandingsSnapshotsFromSupabase(futebolId);
+        this._emitChange('standingsSnapshot', null);
+      });
+      channel.on('postgres_changes', { event: '*', schema: 'public', table: 'jogadores' }, async () => {
+        await this.syncPlayersFromSupabase(futebolId);
+        this._emitChange('players', this.getPlayers());
+      });
+      channel.on('postgres_changes', { event: '*', schema: 'public', table: 'capas' }, async () => {
+        await this.syncCapasFromSupabase(futebolId);
+        this._emitChange('capas', this.getCapas());
+      });
+      channel.on('postgres_changes', { event: '*', schema: 'public', table: 'futebois' }, (payload) => {
+        if (payload && payload.new && payload.new.id === futebolId) {
+          this.currentFutebol = { ...this.currentFutebol, ...payload.new };
+          store.setItem(STORAGE_KEYS.CURRENT_FUTEBOL, JSON.stringify(this.currentFutebol));
+          this._emitChange('futebolUpdated', this.currentFutebol);
+        }
+      });
+      channel.subscribe();
+      this.realtimeSubscription = channel;
+    } catch (e) {
+      console.warn('Realtime subscription:', e);
+    }
+  },
+
+  // ============================================================================
+  // CADASTRO GERAL DE JOGADORES (ISOLADO POR FUTEBOL)
+  // ============================================================================
+  getPlayers() {
+    try {
+      const key = this._getScopedKey('players');
+      const data = store.getItem(key);
+      if (!data) return [];
+      const parsed = JSON.parse(data);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.map(p => ({
+        ...p,
+        gols_historicos_iniciais: parseInt(p.gols_historicos_iniciais, 10) || 0,
+        capas_historicas_iniciais: parseInt(p.capas_historicas_iniciais, 10) || 0
+      }));
+    } catch {
+      return [];
+    }
+  },
+
+  savePlayers(players) {
+    this.assertAdmin('Salvar ou alterar jogadores');
+    try {
+      const currentList = this.getPlayers();
+      const existingMap = new Map(currentList.map(p => [p.id, p]));
+      const isHistAberto = this.isHistoricoInicialAberto();
+
+      const normalized = (players || []).map(p => {
+        const existing = existingMap.get(p.id);
+        if (!isHistAberto) {
+          if (!existing) {
+            // Novo jogador cadastrado após fechamento: entra obrigatoriamente com 0
+            return {
+              ...p,
+              gols_historicos_iniciais: 0,
+              capas_historicas_iniciais: 0
+            };
+          } else {
+            // Jogador existente mantém seus valores históricos prévios sem alteração
+            return {
+              ...p,
+              gols_historicos_iniciais: existing.gols_historicos_iniciais || 0,
+              capas_historicas_iniciais: existing.capas_historicas_iniciais || 0
+            };
+          }
+        }
+        return {
+          ...p,
+          gols_historicos_iniciais: parseInt(p.gols_historicos_iniciais, 10) || 0,
+          capas_historicas_iniciais: parseInt(p.capas_historicas_iniciais, 10) || 0
+        };
+      });
+
+      const key = this._getScopedKey('players');
+      store.setItem(key, JSON.stringify(normalized));
+
+      // Sincroniza com Supabase preservando chaves e histórico
+      if (this.currentFutebol) {
+        const futId = this.currentFutebol.id;
+        const rows = normalized.map(p => ({
+          id: p.id,
+          futebol_id: futId,
+          nome: p.name,
+          estrelas: p.stars,
+          gols_historicos_iniciais: p.gols_historicos_iniciais,
+          capas_historicas_iniciais: p.capas_historicas_iniciais,
+          created_at: p.createdAt || new Date().toISOString()
+        }));
+
+        supabase.from('jogadores').insert(rows).catch(err => {
+          console.warn('[Storage.savePlayers] Erro supabase insert jogadores:', err);
+        });
+      }
+
+      this._emitChange('players', normalized);
+      return true;
+    } catch (e) {
+      console.error('Erro ao salvar jogadores:', e);
+      throw e;
+    }
+  },
+
+  async updatePlayerStars(playerId, newStars) {
+    this.assertAdmin('Alterar estrelas do jogador');
+    const stars = Math.min(5, Math.max(1, parseInt(newStars, 10) || 1));
+    const players = this.getPlayers();
+    const player = players.find(p => p.id === playerId);
+    if (!player) {
+      throw new Error(`Jogador com id "${playerId}" não encontrado.`);
+    }
+
+    player.stars = stars;
+    this.savePlayers(players);
+
+    // Sincroniza estrelas no time da rodada atual caso esteja em andamento
+    const currentRound = this.getCurrentRound();
+    if (currentRound && currentRound.teams) {
+      let teamChanged = false;
+      Object.values(currentRound.teams).forEach(team => {
+        if (team && Array.isArray(team.players)) {
+          const tp = team.players.find(p => p.id === playerId);
+          if (tp && tp.stars !== stars) {
+            tp.stars = stars;
+            teamChanged = true;
+          }
+        }
+      });
+      if (teamChanged) {
+        store.setItem(this._getScopedKey('current_round'), JSON.stringify(currentRound));
+        this._emitChange('currentRound', currentRound);
+      }
+    }
+
+    // Persiste atualização diretamente no Supabase
+    if (this.currentFutebol) {
+      const futId = this.currentFutebol.id;
+      try {
+        await supabase.from('jogadores').update({
+          estrelas: stars
+        }).eq('id', playerId).eq('futebol_id', futId);
+      } catch (err) {
+        console.warn('[Storage] Erro ao sincronizar estrelas no Supabase:', err);
+      }
+    }
+
+    return player;
+  },
+
+  async updatePlayer(playerData) {
+    this.assertAdmin('Editar jogador');
+    if (!playerData || !playerData.id) {
+      throw new Error('Dados inválidos do jogador.');
+    }
+    const players = this.getPlayers();
+    const idx = players.findIndex(p => p.id === playerData.id);
+    if (idx === -1) {
+      throw new Error('Jogador não encontrado.');
+    }
+
+    const current = players[idx];
+    const newStars = playerData.stars !== undefined ? Math.min(5, Math.max(1, parseInt(playerData.stars, 10) || 1)) : current.stars;
+    const newName = playerData.name ? playerData.name.trim() : current.name;
+
+    players[idx] = {
+      ...current,
+      name: newName,
+      stars: newStars
+    };
+
+    this.savePlayers(players);
+
+    // Sincroniza também no time da rodada atual se houver
+    const currentRound = this.getCurrentRound();
+    if (currentRound && currentRound.teams) {
+      let teamChanged = false;
+      Object.values(currentRound.teams).forEach(team => {
+        if (team && Array.isArray(team.players)) {
+          const tp = team.players.find(p => p.id === playerData.id);
+          if (tp) {
+            if (tp.name !== newName || tp.stars !== newStars) {
+              tp.name = newName;
+              tp.stars = newStars;
+              teamChanged = true;
+            }
+          }
+        }
+      });
+      if (teamChanged) {
+        store.setItem(this._getScopedKey('current_round'), JSON.stringify(currentRound));
+        this._emitChange('currentRound', currentRound);
+      }
+    }
+
+    if (this.currentFutebol) {
+      const futId = this.currentFutebol.id;
+      try {
+        await supabase.from('jogadores').update({
+          nome: newName,
+          estrelas: newStars
+        }).eq('id', playerData.id).eq('futebol_id', futId);
+      } catch (err) {
+        console.warn('[Storage] Erro ao atualizar jogador no Supabase:', err);
+      }
+    }
+
+    return players[idx];
+  },
+
+  // ============================================================================
+  // CARGA DE DADOS HISTÓRICOS INICIAIS (GOLS E CAPAS PRÉ-FUTRODA)
+  // ============================================================================
+  isHistoricoInicialAberto() {
+    if (!this.currentFutebol) return false;
+    return this.currentFutebol.historico_inicial_aberto !== false;
+  },
+
+  async saveHistoricalData(updatesArray) {
+    this.assertAdmin('Salvar dados históricos iniciais');
+    if (!this.isHistoricoInicialAberto()) {
+      throw new Error('A carga histórica inicial deste futebol já foi finalizada e os dados estão bloqueados.');
+    }
+
+    if (!Array.isArray(updatesArray)) {
+      throw new Error('Formato inválido de dados históricos.');
+    }
+
+    const players = this.getPlayers();
+    const playerMap = new Map(players.map(p => [p.id, p]));
+
+    for (const item of updatesArray) {
+      if (!item.id || !playerMap.has(item.id)) continue;
+      const p = playerMap.get(item.id);
+
+      const rawGoals = item.gols_historicos_iniciais;
+      const rawCapas = item.capas_historicas_iniciais;
+
+      const numGoals = Number(rawGoals);
+      const numCapas = Number(rawCapas);
+
+      if (!Number.isInteger(numGoals) || numGoals < 0) {
+        throw new Error(`Gols do jogador "${p.name}" deve ser um número inteiro maior ou igual a zero.`);
+      }
+      if (!Number.isInteger(numCapas) || numCapas < 0) {
+        throw new Error(`Capas do jogador "${p.name}" deve ser um número inteiro maior ou igual a zero.`);
+      }
+
+      p.gols_historicos_iniciais = numGoals;
+      p.capas_historicas_iniciais = numCapas;
+    }
+
+    const key = this._getScopedKey('players');
+    store.setItem(key, JSON.stringify(players));
+
+    // Sincroniza com Supabase
+    if (this.currentFutebol) {
+      const futId = this.currentFutebol.id;
+      for (const item of updatesArray) {
+        if (!item.id) continue;
+        const res = await supabase.from('jogadores').update({
+          gols_historicos_iniciais: Number(item.gols_historicos_iniciais) || 0,
+          capas_historicas_iniciais: Number(item.capas_historicas_iniciais) || 0
+        }).eq('id', item.id).eq('futebol_id', futId);
+
+        if (!res.data || (Array.isArray(res.data) && res.data.length === 0)) {
+          const p = playerMap.get(item.id);
+          if (p) {
+            await supabase.from('jogadores').insert([{
+              id: p.id,
+              futebol_id: futId,
+              nome: p.name,
+              estrelas: p.stars,
+              gols_historicos_iniciais: Number(item.gols_historicos_iniciais) || 0,
+              capas_historicas_iniciais: Number(item.capas_historicas_iniciais) || 0,
+              created_at: p.createdAt || new Date().toISOString()
+            }]);
+          }
+        }
+      }
+    }
+
+    this._emitChange('players', players);
+    this._emitChange('historicalDataUpdated', players);
+    return { success: true };
+  },
+
+  async finalizeHistoricalLoad() {
+    this.assertAdmin('Finalizar carga histórica');
+    if (!this.isHistoricoInicialAberto()) {
+      throw new Error('A carga histórica inicial já foi finalizada.');
+    }
+
+    this.currentFutebol.historico_inicial_aberto = false;
+    store.setItem(STORAGE_KEYS.CURRENT_FUTEBOL, JSON.stringify(this.currentFutebol));
+
+    if (this.currentFutebol) {
+      try {
+        await supabase.from('futebois').update({
+          historico_inicial_aberto: false
+        }).eq('id', this.currentFutebol.id);
+      } catch (err) {
+        console.warn('Erro ao atualizar historico_inicial_aberto no Supabase:', err);
+      }
+    }
+
+    this._emitChange('historicalLoadFinalized', false);
+    this._emitChange('futebolUpdated', this.currentFutebol);
+    return { success: true };
+  },
+
+  async syncPlayersFromSupabase(futebolId) {
+    if (!futebolId) return;
+    try {
+      const { data: dbPlayers } = await supabase
+        .from('jogadores')
+        .select('*')
+        .eq('futebol_id', futebolId);
+
+      if (dbPlayers && Array.isArray(dbPlayers) && dbPlayers.length > 0) {
+        const localPlayers = this.getPlayers();
+        const merged = dbPlayers.map(dp => {
+          const existing = localPlayers.find(lp => lp.id === dp.id);
+          return {
+            id: dp.id,
+            name: dp.nome,
+            stars: dp.estrelas,
+            gols_historicos_iniciais: dp.gols_historicos_iniciais !== undefined ? Number(dp.gols_historicos_iniciais) : (existing ? existing.gols_historicos_iniciais : 0),
+            capas_historicas_iniciais: dp.capas_historicas_iniciais !== undefined ? Number(dp.capas_historicas_iniciais) : (existing ? existing.capas_historicas_iniciais : 0),
+            createdAt: dp.created_at || (existing ? existing.createdAt : new Date().toISOString())
+          };
+        });
+        const key = this._getScopedKey('players');
+        store.setItem(key, JSON.stringify(merged));
+        this._emitChange('players', merged);
+      }
+    } catch (err) {
+      console.warn('[Storage] Erro ao sincronizar jogadores:', err);
+    }
+  },
+
+  async syncCapasFromSupabase(futebolId) {
+    if (!futebolId) return;
+    try {
+      const { data: dbCapas } = await supabase
+        .from('capas')
+        .select('*')
+        .eq('futebol_id', futebolId);
+
+      if (dbCapas && Array.isArray(dbCapas)) {
+        const localCapas = this.getCapas();
+        const merged = [...localCapas];
+        dbCapas.forEach(dc => {
+          if (!merged.some(mc => mc.id === dc.id || (mc.rodada_id === dc.rodada_id && mc.jogador_id === dc.jogador_id))) {
+            merged.push({
+              id: dc.id,
+              futebol_id: dc.futebol_id,
+              rodada_id: dc.rodada_id,
+              jogador_id: dc.jogador_id,
+              time_id: dc.time_id,
+              playerName: dc.playerName || '',
+              teamName: dc.teamName || '',
+              date: dc.date || '',
+              createdAt: dc.created_at || new Date().toISOString()
+            });
+          }
+        });
+        const key = this._getScopedKey('capas');
+        store.setItem(key, JSON.stringify(merged));
+        this._emitChange('capas', merged);
+      }
+    } catch (err) {
+      console.warn('[Storage] Erro ao sincronizar capas:', err);
+    }
+  },
+
+  // ============================================================================
+  // SELEÇÃO DA RODADA (ISOLADA POR FUTEBOL)
+  // ============================================================================
+  getSelectedPlayerIds() {
+    try {
+      const key = this._getScopedKey('selected_players');
+      const data = store.getItem(key);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  saveSelectedPlayerIds(ids) {
+    this.assertAdmin('Selecionar jogadores da rodada');
+    if (this.isTeamsLocked()) {
+      throw new Error('A composição dos times está bloqueada após o início da noite.');
+    }
+    try {
+      const key = this._getScopedKey('selected_players');
+      store.setItem(key, JSON.stringify(ids || []));
+      this._emitChange('selectedPlayers', ids);
+      return true;
+    } catch (e) {
+      throw e;
+    }
+  },
+
+  // ============================================================================
+  // CORES DOS TIMES
+  // ============================================================================
+  getTeamColors() {
+    try {
+      const key = this._getScopedKey('team_colors');
+      const data = store.getItem(key);
+      return data ? { ...DEFAULT_COLORS, ...JSON.parse(data) } : { ...DEFAULT_COLORS };
+    } catch {
+      return { ...DEFAULT_COLORS };
+    }
+  },
+
+  saveTeamColors(colors) {
+    this.assertAdmin('Alterar cores dos times');
+    try {
+      const key = this._getScopedKey('team_colors');
+      const current = this.getTeamColors();
+      const updated = { ...current, ...colors };
+      store.setItem(key, JSON.stringify(updated));
+      this._emitChange('colors', updated);
+      return true;
+    } catch (e) {
+      throw e;
+    }
+  },
+
+  // ============================================================================
+  // RODADAS (ROUNDS)
+  // ============================================================================
+  getRounds() {
+    try {
+      const key = this._getScopedKey('rounds');
+      const data = store.getItem(key);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  saveRounds(rounds) {
+    this.assertAdmin('Salvar rodadas');
+    try {
+      const key = this._getScopedKey('rounds');
+      store.setItem(key, JSON.stringify(rounds || []));
+      this._emitChange('rounds', rounds);
+      return true;
+    } catch (e) {
+      throw e;
+    }
+  },
+
+  getCurrentRound() {
+    try {
+      const key = this._getScopedKey('current_round');
+      const data = store.getItem(key);
+      return data ? JSON.parse(data) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  saveCurrentRound(round) {
+    this.assertAdmin('Salvar rodada atual');
+    try {
+      const key = this._getScopedKey('current_round');
+      if (!round) {
+        store.removeItem(key);
+      } else {
+        store.setItem(key, JSON.stringify(round));
+        if (round.teams && !this.isTeamsLocked()) {
+          this.saveTeams(round.teams);
+        }
+
+        // Sincroniza com Supabase tabela 'rodadas'
+        if (this.currentFutebol) {
+          const futId = this.currentFutebol.id;
+          const dbRound = {
+            id: round.id,
+            futebol_id: futId,
+            numero: round.numero || 1,
+            data: round.dateKey || new Date().toISOString().split('T')[0],
+            status: round.status || 'READY',
+            campeao_time_id: round.campeaoTimeId || null,
+            campeao_time_nome: round.campeaoTimeNome || null,
+            programacao: round.programacao || [],
+            standings_snapshot: round.standingsSnapshot || null,
+            created_at: round.createdAt || new Date().toISOString()
+          };
+          supabase.from('rodadas').update(dbRound).eq('id', round.id).then(res => {
+            if (!res.data || (Array.isArray(res.data) && res.data.length === 0)) {
+              supabase.from('rodadas').insert([dbRound]).catch(() => {});
+            }
+          }).catch(() => {
+            supabase.from('rodadas').insert([dbRound]).catch(() => {});
+          });
+        }
+      }
+      this._emitChange('currentRound', round);
+      return true;
+    } catch (e) {
+      throw e;
+    }
+  },
+
+  startNewRound() {
+    this.assertAdmin('Iniciar nova rodada');
+    try {
+      const currentRound = this.getCurrentRound();
+      if (currentRound) {
+        const rounds = this.getRounds();
+        if (!rounds.some(r => r.id === currentRound.id)) {
+          rounds.unshift(currentRound);
+          this.saveRounds(rounds);
+        }
+      }
+
+      store.removeItem(this._getScopedKey('current_round'));
+      store.removeItem(this._getScopedKey('selected_players'));
+      store.removeItem(this._getScopedKey('teams'));
+      store.removeItem(this._getScopedKey('draw_info'));
+      store.removeItem(this._getScopedKey('current_match'));
+      store.removeItem(this._getScopedKey('live_match'));
+
+      this._emitChange('newRound', null);
+      return true;
+    } catch (e) {
+      throw e;
+    }
+  },
+
+  // ============================================================================
+  // TIMES E SORTEIO
+  // ============================================================================
+  getTeams() {
+    try {
+      const key = this._getScopedKey('teams');
+      const data = store.getItem(key);
+      return data ? JSON.parse(data) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  saveTeams(teams) {
+    this.assertAdmin('Salvar times sorteados');
+    if (teams !== null && this.isTeamsLocked()) {
+      throw new Error('A composição dos times está bloqueada após o início da noite.');
+    }
+    try {
+      const key = this._getScopedKey('teams');
+      if (!teams) {
+        store.removeItem(key);
+      } else {
+        store.setItem(key, JSON.stringify(teams));
+      }
+      this._emitChange('teams', teams);
+      return true;
+    } catch (e) {
+      throw e;
+    }
+  },
+
+  getDrawInfo() {
+    try {
+      const key = this._getScopedKey('draw_info');
+      const data = store.getItem(key);
+      return data ? JSON.parse(data) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  saveDrawInfo(info) {
+    this.assertAdmin('Salvar resumo do sorteio');
+    try {
+      const key = this._getScopedKey('draw_info');
+      if (!info) store.removeItem(key);
+      else store.setItem(key, JSON.stringify(info));
+      return true;
+    } catch (e) {
+      throw e;
+    }
+  },
+
+  // ============================================================================
+  // PROGRAMAÇÃO DAS PARTIDAS E CONTROLE DE ESTADOS DA RODADA
+  // Estados da rodada: 'PLANNING' | 'READY' | 'ACTIVE' | 'FINISHED'
+  // ============================================================================
+  isTeamsLocked() {
+    const round = this.getCurrentRound();
+    if (!round) return false;
+    return round.status === 'ACTIVE' || round.status === 'FINISHED';
+  },
+
+  isScheduleLocked() {
+    const round = this.getCurrentRound();
+    if (!round) return false;
+    return round.status === 'ACTIVE' || round.status === 'FINISHED';
+  },
+
+  getSchedule() {
+    const round = this.getCurrentRound();
+    if (round && Array.isArray(round.programacao) && round.programacao.length > 0) {
+      return round.programacao;
+    }
+    // Programação padrão inicial com Partida 01 obrigatória Time 1 x Time 2
+    return [
+      { id: 'fix_1', order: 1, homeTeamId: 'time_1', awayTeamId: 'time_2', homeTeamName: 'Time 1', awayTeamName: 'Time 2' }
+    ];
+  },
+
+  saveSchedule(fixtures) {
+    this.assertAdmin('Salvar programação da noite');
+    if (this.isScheduleLocked()) {
+      throw new Error('A programação está bloqueada após o início da noite e não pode ser alterada.');
+    }
+
+    const round = this.getCurrentRound();
+    if (!round) {
+      throw new Error('Nenhuma rodada ativa encontrada para salvar programação.');
+    }
+
+    if (!Array.isArray(fixtures) || fixtures.length === 0) {
+      throw new Error('A programação deve conter pelo menos a Partida 01.');
+    }
+
+    // Regra: Primeira partida é obrigatoriamente Time 1 x Time 2
+    const first = fixtures[0];
+    if (first.homeTeamId !== 'time_1' || first.awayTeamId !== 'time_2') {
+      throw new Error('A primeira partida é obrigatoriamente Time 1 x Time 2.');
+    }
+
+    // Regra: Time mandante e visitante devem ser diferentes
+    for (let i = 0; i < fixtures.length; i++) {
+      const f = fixtures[i];
+      if (f.homeTeamId === f.awayTeamId) {
+        throw new Error(`Partida ${i + 1} inválida: time mandante e visitante não podem ser iguais.`);
+      }
+    }
+
+    round.programacao = fixtures.map((f, idx) => ({
+      id: f.id || `fix_${idx + 1}`,
+      order: idx + 1,
+      homeTeamId: f.homeTeamId,
+      awayTeamId: f.awayTeamId,
+      homeTeamName: f.homeTeamName || (f.homeTeamId === 'time_1' ? 'Time 1' : f.homeTeamId === 'time_2' ? 'Time 2' : f.homeTeamId === 'time_3' ? 'Time 3' : 'Time 4'),
+      awayTeamName: f.awayTeamName || (f.awayTeamId === 'time_1' ? 'Time 1' : f.awayTeamId === 'time_2' ? 'Time 2' : f.awayTeamId === 'time_3' ? 'Time 3' : 'Time 4')
+    }));
+
+    if (round.status === 'PLANNING' || !round.status) {
+      round.status = 'READY';
+    }
+
+    this.saveCurrentRound(round);
+    this._emitChange('schedule', round.programacao);
+    return true;
+  },
+
+  startNight() {
+    this.assertAdmin('Iniciar noite');
+    const round = this.getCurrentRound();
+    if (!round) throw new Error('Crie uma rodada antes de iniciar a noite.');
+    if (!round.teams) throw new Error('Realize o sorteio dos 4 times antes de iniciar.');
+
+    round.status = 'ACTIVE';
+    this.saveCurrentRound(round);
+    this._emitChange('nightStarted', round);
+    return true;
+  },
+
+  _computeStandingsFallback(matchesList = [], currentRound = null) {
+    const round = currentRound || this.getCurrentRound();
+    const storedTeams = this.getTeams() || (round && round.teams ? round.teams : null) || {};
+    const colors = this.getTeamColors();
+    const teamKeys = ['time_1', 'time_2', 'time_3', 'time_4'];
+    const stats = {};
+
+    teamKeys.forEach((key, idx) => {
+      const teamObj = storedTeams[key] || storedTeams[`team_${idx + 1}`];
+      stats[key] = {
+        id: key,
+        name: teamObj && teamObj.name ? teamObj.name : `Time ${idx + 1}`,
+        j: 0, v: 0, e: 0, d: 0, gp: 0, gc: 0, sg: 0, pts: 0,
+        color: (teamObj && teamObj.color) || colors[key] || '#3b82f6'
+      };
+    });
+
+    const resolveKey = (id) => {
+      if (!id) return null;
+      if (stats[id]) return id;
+      const lower = String(id).toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (lower === 'time1' || lower === 'team1') return 'time_1';
+      if (lower === 'time2' || lower === 'team2') return 'time_2';
+      if (lower === 'time3' || lower === 'team3') return 'time_3';
+      if (lower === 'time4' || lower === 'team4') return 'time_4';
+      return null;
+    };
+
+    const processed = new Set();
+    (matchesList || []).forEach(m => {
+      if (m.id) {
+        if (processed.has(m.id)) return;
+        processed.add(m.id);
+      }
+      const homeKey = resolveKey(m.homeTeamId);
+      const awayKey = resolveKey(m.awayTeamId);
+      if (!homeKey || !awayKey) return;
+
+      const home = stats[homeKey];
+      const away = stats[awayKey];
+      const homeScore = Number(m.homeScore) || 0;
+      const awayScore = Number(m.awayScore) || 0;
+
+      home.j += 1;
+      away.j += 1;
+      home.gp += homeScore;
+      home.gc += awayScore;
+      away.gp += awayScore;
+      away.gc += homeScore;
+
+      if (homeScore > awayScore) {
+        home.v += 1;
+        home.pts += 3;
+        away.d += 1;
+      } else if (awayScore > homeScore) {
+        away.v += 1;
+        away.pts += 3;
+        home.d += 1;
+      } else {
+        home.e += 1;
+        home.pts += 1;
+        away.e += 1;
+        away.pts += 1;
+      }
+    });
+
+    teamKeys.forEach(k => {
+      stats[k].sg = stats[k].gp - stats[k].gc;
+    });
+
+    const rows = Object.values(stats);
+    rows.sort((a, b) => {
+      if (b.pts !== a.pts) return b.pts - a.pts;
+      if (b.sg !== a.sg) return b.sg - a.sg;
+      if (b.gp !== a.gp) return b.gp - a.gp;
+      if (a.gc !== b.gc) return a.gc - b.gc;
+      return a.id.localeCompare(b.id);
+    });
+
+    return rows;
+  },
+
+  saveRoundStandingsSnapshot(roundId, standings, championTeamId = null, championTeamName = null) {
+    if (!roundId || !Array.isArray(standings)) return;
+    try {
+      const key = this._getScopedKey('rodada_classificacao');
+      let allSnapshots = {};
+      try {
+        allSnapshots = JSON.parse(store.getItem(key) || '{}');
+      } catch {
+        allSnapshots = {};
+      }
+      allSnapshots[roundId] = standings;
+      store.setItem(key, JSON.stringify(allSnapshots));
+
+      // Assegura também na rodada salva
+      const rounds = this.getRounds();
+      const r = rounds.find(item => item.id === roundId);
+      if (r) {
+        r.standingsSnapshot = standings;
+        if (championTeamId) r.campeaoTimeId = championTeamId;
+        if (championTeamName) r.campeaoTimeNome = championTeamName;
+        const rKey = this._getScopedKey('rounds');
+        store.setItem(rKey, JSON.stringify(rounds || []));
+      }
+      const currentRound = this.getCurrentRound();
+      if (currentRound && currentRound.id === roundId) {
+        currentRound.standingsSnapshot = standings;
+        if (championTeamId) currentRound.campeaoTimeId = championTeamId;
+        if (championTeamName) currentRound.campeaoTimeNome = championTeamName;
+        store.setItem(this._getScopedKey('current_round'), JSON.stringify(currentRound));
+      }
+
+      // Sincroniza com Supabase tabela 'rodada_classificacao'
+      if (this.currentFutebol) {
+        const futId = this.currentFutebol.id;
+        const rows = standings.map((row, idx) => ({
+          id: `class_${roundId}_${row.id}`,
+          rodada_id: roundId,
+          futebol_id: futId,
+          time_id: row.id,
+          time_nome: row.name,
+          jogos: row.j,
+          vitorias: row.v,
+          empates: row.e,
+          derrotas: row.d,
+          gols_pro: row.gp,
+          gols_contra: row.gc,
+          saldo_gols: row.sg,
+          pontos: row.pts,
+          posicao: idx + 1,
+          created_at: new Date().toISOString()
+        }));
+
+        supabase.from('rodada_classificacao').delete().eq('rodada_id', roundId).then(() => {
+          supabase.from('rodada_classificacao').insert(rows).catch(err => {
+            console.warn('[Storage] Sync rodada_classificacao error:', err);
+          });
+        }).catch(() => {
+          supabase.from('rodada_classificacao').insert(rows).catch(() => {});
+        });
+      }
+
+      this._emitChange('standingsSnapshot', { roundId, standings });
+      return true;
+    } catch (e) {
+      console.warn('[Storage] Erro ao salvar snapshot de classificação:', e);
+      return false;
+    }
+  },
+
+  getRoundStandingsSnapshot(roundId) {
+    if (!roundId) return null;
+    const currentRound = this.getCurrentRound();
+    if (currentRound && currentRound.id === roundId && currentRound.standingsSnapshot) {
+      return currentRound.standingsSnapshot;
+    }
+    const rounds = this.getRounds();
+    const r = rounds.find(item => item.id === roundId);
+    if (r && r.standingsSnapshot) {
+      return r.standingsSnapshot;
+    }
+    try {
+      const key = this._getScopedKey('rodada_classificacao');
+      const allSnapshots = JSON.parse(store.getItem(key) || '{}');
+      return allSnapshots[roundId] || null;
+    } catch {
+      return null;
+    }
+  },
+
+  getAllStandingsSnapshots() {
+    try {
+      const key = this._getScopedKey('rodada_classificacao');
+      return JSON.parse(store.getItem(key) || '{}');
+    } catch {
+      return {};
+    }
+  },
+
+  finalizeNight({ championTeamId, championTeamName, capaPlayers, standingsSnapshot = null }) {
+    this.assertAdmin('Encerrar noite');
+    const round = this.getCurrentRound();
+    if (!round) throw new Error('Nenhuma rodada ativa encontrada.');
+
+    // Regra: Bloquear se houver partida em andamento
+    const live = this.getLiveMatch();
+    if (live && (live.isActive || live.status === 'running' || live.status === 'paused')) {
+      throw new Error('Não é possível encerrar a noite com uma partida em andamento. Finalize a partida atual.');
+    }
+
+    const allMatches = this.getMatches();
+    const roundMatches = allMatches.filter(m => (round && m.roundId === round.id) || m.dateKey === round.dateKey);
+
+    // Regra: Exige ao menos uma partida realizada
+    if (roundMatches.length === 0) {
+      throw new Error('Realize e finalize ao menos uma partida antes de encerrar a noite.');
+    }
+
+    // 1. Calcula a classificação final da rodada
+    let finalStandings = standingsSnapshot;
+    if (!finalStandings || !Array.isArray(finalStandings)) {
+      if (typeof globalThis !== 'undefined' && globalThis.Tabela) {
+        finalStandings = globalThis.Tabela.calcularTabela(roundMatches, null, round);
+      } else if (typeof window !== 'undefined' && window.Tabela) {
+        finalStandings = window.Tabela.calcularTabela(roundMatches, null, round);
+      } else {
+        finalStandings = this._computeStandingsFallback(roundMatches, round);
+      }
+    }
+
+    // 2. Salva SNAPSHOT da tabela final antes de marcar como FINISHED
+    round.standingsSnapshot = finalStandings;
+    round.campeaoTimeId = championTeamId;
+    round.campeaoTimeNome = championTeamName;
+    round.capaPlayerIds = (capaPlayers || []).map(p => p.id);
+    round.finishedAt = new Date().toISOString();
+
+    this.saveRoundStandingsSnapshot(round.id, finalStandings, championTeamId, championTeamName);
+
+    // 3. Atribuição de Capa: exatamente 1 Capa para cada um dos 5 atletas do time campeão
+    const capaRecords = (capaPlayers || []).map(p => ({
+      id: Utils.generateId('capa'),
+      futebol_id: this.currentFutebol ? this.currentFutebol.id : 'global',
+      rodada_id: round.id,
+      jogador_id: p.id,
+      time_id: championTeamId,
+      playerName: p.name,
+      teamName: championTeamName,
+      date: round.date,
+      createdAt: new Date().toISOString()
+    }));
+
+    this.addCapas(capaRecords);
+
+    // 4. Marca status como FINISHED
+    round.status = 'FINISHED';
+
+    // Salva rodada atualizada
+    this.saveCurrentRound(round);
+
+    // Adiciona / atualiza no histórico permanente de rodadas
+    const rounds = this.getRounds();
+    const existingIdx = rounds.findIndex(r => r.id === round.id);
+    if (existingIdx >= 0) {
+      rounds[existingIdx] = round;
+    } else {
+      rounds.unshift(round);
+    }
+    this.saveRounds(rounds);
+
+    // Sincroniza rodada com Supabase
+    if (this.currentFutebol) {
+      const futId = this.currentFutebol.id;
+      const dbRound = {
+        id: round.id,
+        futebol_id: futId,
+        numero: round.numero || 1,
+        data: round.dateKey || new Date().toISOString().split('T')[0],
+        status: 'FINISHED',
+        campeao_time_id: championTeamId,
+        campeao_time_nome: championTeamName,
+        programacao: round.programacao,
+        standings_snapshot: finalStandings,
+        created_at: round.createdAt || new Date().toISOString()
+      };
+      supabase.from('rodadas').update(dbRound).eq('id', round.id).catch(() => {
+        supabase.from('rodadas').insert([dbRound]).catch(() => {});
+      });
+    }
+
+    this._emitChange('nightFinalized', round);
+    return true;
+  },
+
+  // ============================================================================
+  // CAPAS (HISTÓRICO INDIVIDUAL DE CAPAS CONQUISTADAS POR RODADA)
+  // Regra: Capa só existe no encerramento da noite para os 5 atletas do campeão.
+  // Idempotente: um jogador só pode receber 1 Capa na mesma rodada.
+  // ============================================================================
+  getCapas() {
+    try {
+      const key = this._getScopedKey('capas');
+      const data = store.getItem(key);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  saveCapas(capas) {
+    this.assertAdmin('Salvar capas');
+    try {
+      const key = this._getScopedKey('capas');
+      store.setItem(key, JSON.stringify(capas || []));
+      this._emitChange('capas', capas);
+      return true;
+    } catch (e) {
+      throw e;
+    }
+  },
+
+  addCapas(newCapas) {
+    this.assertAdmin('Atribuir Capa');
+    const existing = this.getCapas();
+    const toInsert = [];
+
+    for (const c of newCapas) {
+      // Proteção contra duplicidade: mesmo jogador + mesma rodada = 1 única Capa
+      const alreadyHas = existing.some(e => e.rodada_id === c.rodada_id && e.jogador_id === c.jogador_id);
+      if (!alreadyHas) {
+        existing.push(c);
+        toInsert.push(c);
+      }
+    }
+
+    if (toInsert.length > 0) {
+      this.saveCapas(existing);
+
+      if (this.currentFutebol) {
+        const futId = this.currentFutebol.id;
+        const rows = toInsert.map(c => ({
+          id: c.id || Utils.generateId('capa'),
+          futebol_id: futId,
+          rodada_id: c.rodada_id,
+          jogador_id: c.jogador_id,
+          time_id: c.time_id,
+          created_at: c.createdAt || new Date().toISOString()
+        }));
+        supabase.from('capas').insert(rows).catch(err => console.warn('Sync capas:', err));
+      }
+    }
+
+    return { added: toInsert.length, total: existing.length };
+  },
+
+  getPlayerCapas(playerId) {
+    return this.getCapas().filter(c => c.jogador_id === playerId);
+  },
+
+  // ============================================================================
+  // PARTIDAS E HISTÓRICO
+  // ============================================================================
+  getMatches() {
+    try {
+      const key = this._getScopedKey('matches');
+      const data = store.getItem(key);
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  saveMatches(matches) {
+    this.assertAdmin('Salvar partidas');
+    try {
+      const key = this._getScopedKey('matches');
+      store.setItem(key, JSON.stringify(matches));
+      this._emitChange('matches', matches);
+      return true;
+    } catch (e) {
+      throw e;
+    }
+  },
+
+  addMatch(match) {
+    this.assertAdmin('Adicionar partida ao histórico');
+    const matches = this.getMatches();
+    matches.unshift(match);
+
+    // Sincroniza com Supabase
+    if (this.currentFutebol) {
+      const futId = this.currentFutebol.id;
+      const dbMatch = {
+        id: match.id || Utils.generateId('mat'),
+        futebol_id: futId,
+        rodada_id: match.roundId || null,
+        time_casa_id: match.homeTeamId,
+        time_fora_id: match.awayTeamId,
+        time_casa_nome: match.homeTeamName,
+        time_fora_nome: match.awayTeamName,
+        placar_casa: match.homeScore,
+        placar_fora: match.awayScore,
+        status: 'finalizada',
+        tempo_segundos: match.durationSeconds || 0,
+        created_at: match.createdAt || new Date().toISOString()
+      };
+
+      supabase.from('partidas').insert([dbMatch]).then(() => {
+        if (Array.isArray(match.goals) && match.goals.length > 0) {
+          const dbGoals = match.goals.map(g => ({
+            id: g.id || Utils.generateId('gol'),
+            futebol_id: futId,
+            partida_id: dbMatch.id,
+            jogador_id: g.playerId,
+            jogador_nome: g.playerName,
+            time_id: g.teamId,
+            minuto: g.minute || 0,
+            created_at: g.createdAt || new Date().toISOString()
+          }));
+          supabase.from('gols').insert(dbGoals).catch(err => console.warn('Sync gols:', err));
+        }
+      }).catch(err => console.warn('Sync partida:', err));
+    }
+
+    return this.saveMatches(matches);
+  },
+
+  updateMatch(updatedMatch) {
+    this.assertAdmin('Atualizar partida');
+    const matches = this.getMatches();
+    const idx = matches.findIndex(m => m.id === updatedMatch.id);
+    if (idx !== -1) {
+      matches[idx] = updatedMatch;
+    } else {
+      matches.unshift(updatedMatch);
+    }
+    this.saveMatches(matches);
+    return true;
+  },
+
+  // ============================================================================
+  // PARTIDA AO VIVO (SINCRONIZAÇÃO EM TEMPO REAL)
+  // ============================================================================
+  getLiveMatch() {
+    try {
+      const key = this._getScopedKey('live_match');
+      const data = store.getItem(key);
+      if (!data) return null;
+      const parsed = JSON.parse(data);
+      if (!parsed) return null;
+
+      // Normaliza propriedades para formato unificado
+      return {
+        ...parsed,
+        homeScore: parsed.homeScore !== undefined ? parsed.homeScore : (parsed.placar_casa !== undefined ? parsed.placar_casa : 0),
+        awayScore: parsed.awayScore !== undefined ? parsed.awayScore : (parsed.placar_fora !== undefined ? parsed.placar_fora : 0),
+        homeTeamName: parsed.homeTeamName || parsed.time_casa_nome || 'Time 1',
+        homeTeamName: parsed.homeTeamName || parsed.time_casa_nome || 'Time 1',
+        awayTeamName: parsed.awayTeamName || parsed.time_fora_nome || 'Time 2',
+        remainingSeconds: parsed.remainingSeconds !== undefined ? parsed.remainingSeconds : (parsed.tempo_restante !== undefined ? parsed.tempo_restante : 600),
+        durationMinutes: parsed.durationMinutes || (parsed.duration_seconds ? Math.floor(parsed.duration_seconds / 60) : 10),
+        durationSeconds: parsed.durationSeconds || (parsed.durationMinutes ? parsed.durationMinutes * 60 : 600),
+        isActive: parsed.isActive !== undefined ? parsed.isActive : Boolean(parsed.is_active),
+        isPaused: parsed.isPaused !== undefined ? parsed.isPaused : Boolean(parsed.is_paused),
+        status: parsed.status || (parsed.is_active ? (parsed.is_paused ? 'paused' : 'running') : (parsed.isActive ? (parsed.isPaused ? 'paused' : 'running') : 'ready')),
+        startedAt: parsed.startedAt || parsed.started_at || null,
+        pausedAt: parsed.pausedAt || parsed.paused_at || null,
+        goals: parsed.goals || parsed.gols || []
+      };
+    } catch {
+      return null;
+    }
+  },
+
+  getCurrentMatch() {
+    return this.getLiveMatch();
+  },
+
+  saveCurrentMatch(match) {
+    return this.saveLiveMatch(match);
+  },
+
+  _saveLocalLiveMatch(liveData) {
+    const key = this._getScopedKey('live_match');
+    store.setItem(key, JSON.stringify(liveData));
+  },
+
+  saveLocalMatchOnly(liveData) {
+    this._saveLocalLiveMatch(liveData);
+  },
+
+  saveLiveMatch(liveData) {
+    this.assertAdmin('Atualizar partida ao vivo');
+    try {
+      this._saveLocalLiveMatch(liveData);
+
+      // Transmite para Supabase Realtime para espectadores públicos
+      if (this.currentFutebol) {
+        const futId = this.currentFutebol.id;
+        if (!liveData) {
+          supabase.from('partida_ao_vivo')
+            .update({ is_active: false, status: 'finished', updated_at: new Date().toISOString() })
+            .eq('futebol_id', futId)
+            .catch(() => {});
+        } else {
+          const remainingSecs = liveData.remainingSeconds !== undefined 
+            ? liveData.remainingSeconds 
+            : (liveData.tempo_restante !== undefined ? liveData.tempo_restante : (liveData.timeRemaining !== undefined ? liveData.timeRemaining : 600));
+
+          const row = {
+            futebol_id: futId,
+            time_casa_nome: liveData.homeTeamName || 'Time 1',
+            time_fora_nome: liveData.awayTeamName || 'Time 2',
+            placar_casa: liveData.homeScore !== undefined ? liveData.homeScore : 0,
+            placar_fora: liveData.awayScore !== undefined ? liveData.awayScore : 0,
+            tempo_restante: remainingSecs,
+            is_active: Boolean(liveData.isActive !== undefined ? liveData.isActive : liveData.is_active),
+            is_paused: Boolean(liveData.isPaused !== undefined ? liveData.isPaused : liveData.is_paused),
+            status: liveData.status || (liveData.isActive ? (liveData.isPaused ? 'paused' : 'running') : 'ready'),
+            started_at: liveData.startedAt || liveData.started_at || null,
+            paused_at: liveData.pausedAt || liveData.paused_at || null,
+            duration_seconds: liveData.durationSeconds || (liveData.durationMinutes ? liveData.durationMinutes * 60 : 600),
+            gols: liveData.goals || liveData.gols || [],
+            updated_at: new Date().toISOString()
+          };
+
+          supabase.from('partida_ao_vivo')
+            .update(row)
+            .eq('futebol_id', futId)
+            .then(res => {
+              if (!res.data || res.data.length === 0) {
+                // Se não existia ainda, insere
+                supabase.from('partida_ao_vivo').insert([row]).catch(() => {});
+              }
+            })
+            .catch(err => console.warn('Sync live match:', err));
+        }
+      }
+
+      this._emitChange('liveMatch', liveData);
+      this._emitChange('liveMatchUpdate', liveData);
+      return true;
+    } catch (e) {
+      throw e;
+    }
+  },
+
+  // Legacy compatibilidade com currentMatch
+  getCurrentMatch() {
+    return this.getLiveMatch();
+  },
+
+  saveCurrentMatch(match) {
+    return this.saveLiveMatch(match);
+  },
+
+  // ============================================================================
+  // RESET DE DADOS DO FUTEBOL ATUAL
+  // ============================================================================
+  resetAll() {
+    this.assertAdmin('Resetar dados do futebol');
+    try {
+      const keys = [
+        'players', 'selected_players', 'team_colors', 'rounds',
+        'current_round', 'teams', 'draw_info', 'matches', 'live_match', 'capas', 'rodada_classificacao'
+      ];
+      keys.forEach(k => store.removeItem(this._getScopedKey(k)));
+      this._emitChange('reset', null);
+      return true;
+    } catch (e) {
+      throw e;
+    }
+  },
+
+  _listeners: [],
+  onChange(callback) {
+    this._listeners.push(callback);
+  },
+  _emitChange(type, data) {
+    this._listeners.forEach(cb => {
+      try {
+        cb(type, data);
+      } catch (err) {
+        console.error('Erro no listener de storage:', err);
+      }
+    });
+  }
+};
+
+// Auto-inicializa na carga
+Storage.init();
+if (typeof window !== 'undefined') {
+  window.StorageApp = Storage;
+  window.FutStorage = Storage;
+}

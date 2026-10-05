@@ -1,0 +1,963 @@
+/* ==========================================================================
+   FUTRODA / FUTRAIZ — RESPONSIVIDADE COMPLETA & SISTEMA MULTI-DEVICE
+   Dispositivos Suportados:
+   - Mobile Pequeno: 320px – 374px (iPhone SE, Galaxy A01, etc.)
+   - Mobile Padrão & Grande: 375px – 767px (iPhone 12/13/14/15, Pixel, Galaxy S)
+   - Tablet / iPad Portrait: 768px – 1023px (iPad Mini, iPad 10.2", iPad Air, iPad Pro 11")
+   - Desktop & iPad Landscape: 1024px – 1279px (iPad Pro 12.9", Laptops)
+   - Desktop Grande: 1280px+ (Monitores Wide)
+   ========================================================================== */
+
+/* ==========================================================================
+   1. REGRAS GLOBAIS DE CONTENÇÃO & RESPONSIVIDADE
+   NUNCA permitir que a página inteira crie overflow horizontal.
+   ========================================================================== */
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* Containers Fluidos */
+.app-header,
+.header-container,
+.app-main,
+.main-content,
+.app-screen,
+.card,
+.scoreboard,
+.page-head {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+/* Evitar que textos longos forcem estouro horizontal */
+h1, h2, h3, h4, h5, h6,
+.page-title,
+.landing-title,
+.card-title,
+.modal-title,
+p, span, label {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* IDs e Códigos Públicos não devem quebrar */
+.id-pill-code,
+.code-tag,
+.input-code {
+  word-break: keep-all;
+  white-space: nowrap;
+}
+
+/* Imagens e SVGs fluidos */
+img, svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* ==========================================================================
+   2. MOBILE FIRST & TELAS ATÉ 767px
+   ========================================================================== */
+@media (max-width: 767px) {
+  /* Header Mobile */
+  .app-header {
+    height: auto;
+    min-height: 56px;
+    padding: calc(0.45rem + env(safe-area-inset-top, 0px)) 0 0.45rem 0;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .header-container {
+    padding: 0 0.75rem;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .brand {
+    gap: 0.45rem;
+    min-width: 0;
+    flex-shrink: 1;
+  }
+
+  .brand-mark {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+  }
+
+  .brand-titles {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .brand-text {
+    font-size: 1.15rem;
+    white-space: nowrap;
+  }
+
+  .brand-tagline {
+    max-width: 95px;
+    font-size: 0.68rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Desktop nav sempre oculto no mobile */
+  .desktop-nav {
+    display: none !important;
+  }
+
+  .header-actions {
+    gap: 0.35rem;
+    flex-shrink: 0;
+    align-items: center;
+  }
+
+  .id-pill {
+    height: 30px;
+    padding: 0 0.45rem;
+    font-size: 0.72rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .id-pill-code {
+    font-size: 0.78rem;
+  }
+
+  #btn-trocar-futebol {
+    height: 30px;
+    padding: 0 0.5rem;
+    font-size: 0.75rem;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  /* Conteúdo Principal & Espaçamento Inferior Obrigatório para Menu */
+  .app-main,
+  .main-content {
+    width: 100%;
+    max-width: 100%;
+    padding: 0.75rem 0.75rem calc(90px + env(safe-area-inset-bottom, 0px)) 0.75rem !important;
+    overflow-x: clip;
+  }
+
+  /* Cabeçalho de Página (Dashboard, etc.) */
+  .page-head {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .page-head-main {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .page-title {
+    font-size: 1.55rem;
+    line-height: 1.1;
+  }
+
+  /* ==========================================================================
+     3. BARRA DE AÇÕES DO DASHBOARD (MOBILE)
+     Rolagem horizontal suave SOMENTE na barra de ações quando faltar espaço.
+     Botões permanecem em uma linha, sem quebrar o texto, com área confortável.
+     ========================================================================== */
+  .page-head-actions,
+  .action-bar {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 8px !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    scrollbar-width: none !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding: 2px 2px 6px 2px !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .page-head-actions::-webkit-scrollbar,
+  .action-bar::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+
+  .page-head-actions .btn,
+  .action-bar .btn {
+    flex-shrink: 0 !important;
+    white-space: nowrap !important;
+    min-height: 44px !important;
+    height: 44px !important;
+    padding: 0 1rem !important;
+    font-size: 0.85rem !important;
+    font-weight: 700 !important;
+    border-radius: var(--radius-sm) !important;
+    box-sizing: border-box !important;
+  }
+
+  /* ==========================================================================
+     4. MENU INFERIOR MOBILE (BOTTOM NAV)
+     Fixo no rodapé, z-index alto, safe area do iPhone, fluido.
+     ========================================================================== */
+  .bottom-nav {
+    display: flex !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: calc(60px + env(safe-area-inset-bottom, 0px)) !important;
+    min-height: 60px !important;
+    background: var(--bg-glass) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border-top: 1px solid var(--border) !important;
+    z-index: 100 !important;
+    padding: 0 0.25rem calc(8px + env(safe-area-inset-bottom, 0px)) 0.25rem !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Nunca exibir bottom-nav na tela de Landing */
+  body.on-landing .bottom-nav,
+  #screen-landing.active ~ .bottom-nav,
+  .bottom-nav.is-hidden {
+    display: none !important;
+  }
+
+  .nav-item {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 2px !important;
+    height: 100% !important;
+    min-height: 44px !important;
+    padding: 4px 2px !important;
+    color: var(--text-muted) !important;
+    font-size: 0.68rem !important;
+    font-weight: 600 !important;
+    border: none !important;
+    background: none !important;
+    white-space: nowrap !important;
+  }
+
+  .nav-item .i {
+    width: 20px !important;
+    height: 20px !important;
+  }
+
+  .nav-item.active {
+    color: var(--primary) !important;
+  }
+
+  /* ==========================================================================
+     6. CARDS & GRIDS DO DASHBOARD (MOBILE)
+     ========================================================================== */
+  .card {
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-radius: var(--radius-md);
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .stats-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.65rem !important;
+    margin-bottom: 1rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .stat {
+    padding: 0.75rem 0.85rem;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .stat-label {
+    font-size: 0.7rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .stat-value {
+    font-size: 1.85rem;
+  }
+
+  .stat-value-text {
+    font-size: 0.95rem;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Dashboard Colunas em 1 coluna no mobile */
+  .dash-columns,
+  .dashboard-grid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 1rem !important;
+    margin-bottom: 1rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Card Partida ao Vivo no Dashboard */
+  .dash-live-card {
+    padding: 1rem;
+    margin-bottom: 1rem;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .dash-live-matchup {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) !important;
+    gap: 0.5rem !important;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .dash-live-team {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .dash-live-name {
+    font-size: 1.15rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .dash-live-score-wrap {
+    font-size: 2.35rem;
+    gap: 0.4rem;
+    flex-shrink: 0;
+  }
+
+  .dash-live-foot {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: space-between;
+  }
+
+  .dash-admin-shortcuts {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+  }
+
+  .dash-admin-shortcuts .btn {
+    flex: 1 1 calc(50% - 0.5rem) !important;
+    min-height: 42px !important;
+    white-space: nowrap !important;
+    font-size: 0.8rem !important;
+  }
+
+  .settings-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .settings-row .btn {
+    width: 100%;
+  }
+
+  /* ==========================================================================
+     7. BOTÕES & FORMULÁRIOS (MOBILE)
+     ========================================================================== */
+  .btn {
+    min-height: 44px;
+    font-size: 0.875rem;
+    box-sizing: border-box;
+  }
+
+  .btn-sm {
+    min-height: 38px;
+    padding: 0 0.75rem;
+    font-size: 0.8rem;
+  }
+
+  .btn-block {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .form-actions {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .form-actions .btn {
+    flex: 1 1 auto;
+    min-width: 120px;
+    min-height: 44px;
+  }
+
+  /* ==========================================================================
+     8. TABELA DE CLASSIFICAÇÃO (MOBILE)
+     Container rolável isolado; página NÃO rola horizontalmente.
+     ========================================================================== */
+  .sports-table-wrapper,
+  .table-responsive {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: thin !important;
+    box-sizing: border-box !important;
+    margin-bottom: 1rem !important;
+    border-radius: var(--radius-md) !important;
+  }
+
+  .sports-table,
+  .tabela-standings {
+    min-width: 480px !important;
+    width: 100% !important;
+    font-size: 0.82rem !important;
+    white-space: nowrap !important;
+  }
+
+  .sports-table th,
+  .sports-table td,
+  .tabela-standings th,
+  .tabela-standings td {
+    padding: 0.6rem 0.5rem !important;
+  }
+
+  .sports-table .col-pos {
+    width: 32px !important;
+    font-size: 0.95rem !important;
+  }
+
+  .sports-table .col-pts {
+    font-size: 1.1rem !important;
+    padding-right: 0.75rem !important;
+  }
+
+  /* Scoreboard da Partida */
+  .scoreboard {
+    padding: 1rem 0.75rem;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .sb-score {
+    font-size: clamp(3rem, 12vw, 4rem);
+    min-width: 44px;
+  }
+
+  .sb-team-name {
+    font-size: 1.15rem;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sb-timer {
+    font-size: 2rem;
+  }
+
+  .sb-goals {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.65rem;
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .btn-goal {
+    height: 44px;
+    font-size: 0.95rem;
+  }
+
+  .sb-controls {
+    justify-content: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .sb-controls .btn {
+    flex: 1 1 calc(50% - 0.5rem);
+    min-width: 110px;
+    min-height: 44px;
+  }
+
+  .sb-controls-left {
+    display: flex;
+    gap: 0.5rem;
+    flex: 1 1 auto;
+  }
+
+  /* Outras Telas: Split Layout & Seleção */
+  .split-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 1rem !important;
+    width: 100% !important;
+  }
+
+  .selection-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .selection-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0.5rem !important;
+    padding: 0.75rem !important;
+  }
+
+  .list-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .list-toolbar .search-field {
+    width: 100%;
+  }
+
+  .chips {
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+
+  .chips::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* ==========================================================================
+     11. MODAIS (MOBILE)
+     ========================================================================== */
+  .modal,
+  .modal-overlay {
+    padding: 16px !important;
+    box-sizing: border-box !important;
+  }
+
+  .modal-card,
+  .modal-dialog,
+  .modal-content {
+    width: min(100% - 24px, 520px) !important;
+    max-height: calc(100dvh - 24px) !important;
+    max-height: calc(100vh - 24px) !important;
+    overflow: hidden !important;
+    margin: auto !important;
+    box-sizing: border-box !important;
+  }
+
+  .modal-header {
+    padding: 0.85rem 1rem !important;
+    width: 100% !important;
+  }
+
+  .modal-body {
+    padding: 1rem !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    width: 100% !important;
+    max-height: calc(100dvh - 150px) !important;
+  }
+
+  .modal-footer {
+    padding: 0.75rem 1rem !important;
+    width: 100% !important;
+    flex-wrap: wrap !important;
+    gap: 0.5rem !important;
+  }
+
+  .modal-footer .btn {
+    flex: 1 1 auto !important;
+    min-width: 120px !important;
+    min-height: 44px !important;
+  }
+}
+
+/* ==========================================================================
+   MOBILE PEQUENO (320px – 374px)
+   ========================================================================== */
+@media (max-width: 374px) {
+  .brand-text {
+    font-size: 1.02rem;
+  }
+
+  .brand-tagline {
+    display: none !important;
+  }
+
+  .id-pill {
+    padding: 0 0.35rem;
+    font-size: 0.68rem;
+  }
+
+  .id-pill-code {
+    font-size: 0.72rem;
+  }
+
+  #btn-trocar-futebol .btn-label {
+    display: none;
+  }
+
+  #btn-trocar-futebol {
+    padding: 0 0.45rem;
+    min-width: 34px;
+  }
+
+  .page-title {
+    font-size: 1.35rem;
+  }
+
+  .stats-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 0.5rem !important;
+  }
+
+  .stat-value {
+    font-size: 1.65rem;
+  }
+
+  .dash-live-name {
+    font-size: 0.98rem;
+  }
+
+  .dash-live-score-wrap {
+    font-size: 1.95rem;
+  }
+
+  .dash-admin-shortcuts .btn {
+    flex: 1 1 100% !important;
+  }
+
+  .sb-score {
+    font-size: 2.75rem;
+    min-width: 36px;
+  }
+
+  .sb-team-name {
+    font-size: 1rem;
+  }
+
+  .landing-title {
+    font-size: 2.15rem;
+  }
+}
+
+/* ==========================================================================
+   9. TABLET / IPAD EM PORTRAIT (768px – 1023px)
+   Aproveitamento de largura com 2 colunas, navegação adaptada e sem corte.
+   ========================================================================== */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .app-header {
+    height: var(--header-height);
+    padding: 0;
+  }
+
+  .header-container {
+    flex-wrap: nowrap;
+    padding: 0 1.25rem;
+    gap: 0.75rem;
+    justify-content: space-between;
+  }
+
+  .brand-tagline {
+    max-width: 140px;
+    display: inline-block;
+  }
+
+  /* Navegação Adaptada para Tablet: barra horizontal compacta no topo */
+  .desktop-nav {
+    display: flex !important;
+    align-items: center;
+    gap: 0.25rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    max-width: calc(100vw - 320px);
+  }
+
+  .desktop-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-link {
+    height: 34px;
+    padding: 0 0.55rem;
+    font-size: 0.78rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* Bottom Nav não deve aparecer no Tablet/Desktop */
+  .bottom-nav {
+    display: none !important;
+  }
+
+  .app-main,
+  .main-content {
+    max-width: 960px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 1.5rem 1.25rem 3rem 1.25rem !important;
+  }
+
+  .page-head {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    width: 100%;
+  }
+
+  .page-head-actions,
+  .action-bar {
+    display: flex !important;
+    align-items: center;
+    gap: 0.5rem;
+    overflow-x: visible;
+    width: auto;
+    max-width: none;
+    padding: 0;
+  }
+
+  .page-head-actions .btn,
+  .action-bar .btn {
+    min-height: 38px;
+    padding: 0 0.85rem;
+    font-size: 0.82rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* Cards do Dashboard: 2 colunas confortáveis */
+  .dash-columns,
+  .dashboard-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 1.25rem !important;
+  }
+
+  .stats-grid {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 0.85rem !important;
+  }
+
+  .sports-table th,
+  .sports-table td {
+    padding: 0.7rem 0.85rem;
+    font-size: 0.85rem;
+  }
+
+  .split-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 1.25rem;
+  }
+
+  .selection-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .drawn-teams-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .sb-score {
+    font-size: 4.75rem;
+  }
+
+  .sb-team-name {
+    font-size: 1.5rem;
+  }
+}
+
+/* ==========================================================================
+   DESKTOP & IPAD LANDSCAPE (>= 1024px)
+   ========================================================================== */
+@media (min-width: 1024px) {
+  .app-header {
+    height: var(--header-height);
+    padding: 0;
+  }
+
+  .header-container {
+    flex-wrap: nowrap;
+    padding: 0 1rem;
+    max-width: var(--container-max);
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .desktop-nav {
+    display: flex !important;
+    align-items: center;
+    gap: 0.2rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    flex: 1 1 auto;
+    justify-content: center;
+    min-width: 0;
+  }
+
+  .desktop-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-link {
+    height: 34px;
+    padding: 0 0.55rem;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .brand-tagline {
+    max-width: 110px;
+  }
+
+  .header-actions {
+    flex-shrink: 0;
+  }
+
+  .bottom-nav {
+    display: none !important;
+  }
+
+  .app-main,
+  .main-content {
+    max-width: var(--container-max);
+    width: 100%;
+    margin: 0 auto;
+    padding: 1.75rem 1.5rem 4rem 1.5rem !important;
+  }
+
+  .page-head {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .page-head-actions,
+  .action-bar {
+    display: flex !important;
+    align-items: center;
+    gap: 0.5rem;
+    overflow-x: visible;
+    width: auto;
+    max-width: none;
+    padding: 0;
+  }
+
+  .page-head-actions .btn,
+  .action-bar .btn {
+    min-height: 38px;
+    padding: 0 0.95rem;
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+
+  .stats-grid {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 1rem !important;
+  }
+
+  .dash-columns,
+  .dashboard-grid {
+    display: grid !important;
+    grid-template-columns: 1.35fr minmax(0, 1fr) !important;
+    gap: 1.5rem !important;
+  }
+
+  .split-layout {
+    grid-template-columns: 340px minmax(0, 1fr) !important;
+    gap: 1.5rem;
+  }
+
+  .selection-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .drawn-teams-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  .sb-score {
+    font-size: 5.5rem;
+  }
+
+  .sb-team-name {
+    font-size: 1.65rem;
+  }
+
+  .sports-table th,
+  .sports-table td {
+    padding: 0.75rem 1rem;
+  }
+}
+
+/* ==========================================================================
+   DESKTOP GRANDE (>= 1280px)
+   ========================================================================== */
+@media (min-width: 1280px) {
+  .app-main,
+  .main-content {
+    max-width: 1140px;
+  }
+
+  .header-container {
+    max-width: 1140px;
+  }
+
+  .sb-score {
+    font-size: 6rem;
+  }
+}
