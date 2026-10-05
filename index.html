@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>FutRaiz — Sorteio, Placar ao Vivo e Rankings da Pelada</title>
 
-  <meta name="description" content="Organize sua pelada semanal: sorteio equilibrado de times, cronômetro, placar ao vivo, tabela, artilharia e ranking de capa com acesso público por link.">
+  <meta name="description"
+    content="Organize sua pelada semanal: sorteio equilibrado de times, cronômetro, placar ao vivo, tabela, artilharia e ranking de capa com acesso público por link.">
   <meta name="theme-color" content="#07111F">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -16,67 +18,190 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap"
+    rel="stylesheet">
 
   <link rel="stylesheet" href="./css/style.css">
   <link rel="stylesheet" href="./css/responsive.css">
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
+
 <body>
 
   <!-- ==================== SPRITE DE ÍCONES (traço 1.8px, estilo Lucide) ==================== -->
   <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
     <symbol id="logo-mark" viewBox="0 0 32 32">
-      <rect width="32" height="32" rx="7" fill="#00B37A"/>
-      <circle cx="16" cy="16" r="9" fill="none" stroke="#07111F" stroke-width="2"/>
-      <polygon points="16,12.4 19.42,14.89 18.12,18.91 13.88,18.91 12.58,14.89" fill="#07111F"/>
+      <rect width="32" height="32" rx="7" fill="#00B37A" />
+      <circle cx="16" cy="16" r="9" fill="none" stroke="#07111F" stroke-width="2" />
+      <polygon points="16,12.4 19.42,14.89 18.12,18.91 13.88,18.91 12.58,14.89" fill="#07111F" />
       <g stroke="#07111F" stroke-width="1.6" stroke-linecap="round">
-        <line x1="16" y1="12.4" x2="16" y2="7"/>
-        <line x1="19.42" y1="14.89" x2="24.56" y2="13.22"/>
-        <line x1="18.12" y1="18.91" x2="21.29" y2="23.28"/>
-        <line x1="13.88" y1="18.91" x2="10.71" y2="23.28"/>
-        <line x1="12.58" y1="14.89" x2="7.44" y2="13.22"/>
+        <line x1="16" y1="12.4" x2="16" y2="7" />
+        <line x1="19.42" y1="14.89" x2="24.56" y2="13.22" />
+        <line x1="18.12" y1="18.91" x2="21.29" y2="23.28" />
+        <line x1="13.88" y1="18.91" x2="10.71" y2="23.28" />
+        <line x1="12.58" y1="14.89" x2="7.44" y2="13.22" />
       </g>
     </symbol>
-    <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2h-4v-7H9v7H5a2 2 0 0 1-2-2z"/></symbol>
-    <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
-    <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/><path d="m18 14 4 4-4 4"/></symbol>
-    <symbol id="i-whistle" viewBox="0 0 24 24"><circle cx="8" cy="15" r="5"/><path d="M11.5 11.5 21 6v4l-6.6 3"/><path d="M8 6V3"/><path d="m4.5 7-1-1.5"/></symbol>
-    <symbol id="i-table" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></symbol>
-    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
-    <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></symbol>
-    <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
-    <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></symbol>
-    <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
-    <symbol id="i-share" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
-    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="M5 12h14"/></symbol>
-    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
-    <symbol id="i-play" viewBox="0 0 24 24"><polygon points="7 4 19 12 7 20 7 4"/></symbol>
-    <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
-    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></symbol>
-    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
-    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></symbol>
-    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
-    <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
-    <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
-    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></symbol>
-    <symbol id="i-ball" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m12 7.5 4.3 3.1-1.6 5h-5.4l-1.6-5z"/><path d="M12 7.5V2.5"/><path d="m16.3 10.6 4.8-1.6"/><path d="m14.7 15.6 2.9 4.1"/><path d="m9.3 15.6-2.9 4.1"/><path d="M7.7 10.6 2.9 9"/></symbol>
-    <symbol id="i-crown" viewBox="0 0 24 24"><path d="M2.5 18h19l-2-11-5 5-2.5-7-2.5 7-5-5z"/></symbol>
-    <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
-    <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
-    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></symbol>
-    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 16v-4"/><path d="M12 16V8"/><path d="M17 16v-7"/></symbol>
-    <symbol id="i-star" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></symbol>
-    <symbol id="i-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></symbol>
-    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24">
+      <path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2h-4v-7H9v7H5a2 2 0 0 1-2-2z" />
+    </symbol>
+    <symbol id="i-users" viewBox="0 0 24 24">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </symbol>
+    <symbol id="i-shuffle" viewBox="0 0 24 24">
+      <path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22" />
+      <path d="m18 2 4 4-4 4" />
+      <path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2" />
+      <path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8" />
+      <path d="m18 14 4 4-4 4" />
+    </symbol>
+    <symbol id="i-whistle" viewBox="0 0 24 24">
+      <circle cx="8" cy="15" r="5" />
+      <path d="M11.5 11.5 21 6v4l-6.6 3" />
+      <path d="M8 6V3" />
+      <path d="m4.5 7-1-1.5" />
+    </symbol>
+    <symbol id="i-table" viewBox="0 0 24 24">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M3 9h18" />
+      <path d="M3 15h18" />
+      <path d="M9 3v18" />
+    </symbol>
+    <symbol id="i-more" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="19" cy="12" r="1" />
+      <circle cx="5" cy="12" r="1" />
+    </symbol>
+    <symbol id="i-trophy" viewBox="0 0 24 24">
+      <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+      <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+      <path d="M4 22h16" />
+      <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+      <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+      <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+    </symbol>
+    <symbol id="i-history" viewBox="0 0 24 24">
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+      <path d="M3 3v5h5" />
+      <path d="M12 7v5l4 2" />
+    </symbol>
+    <symbol id="i-logout" viewBox="0 0 24 24">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
+    </symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24">
+      <rect width="14" height="14" x="8" y="8" rx="2" />
+      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+    </symbol>
+    <symbol id="i-share" viewBox="0 0 24 24">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24">
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </symbol>
+    <symbol id="i-search" viewBox="0 0 24 24">
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
+    </symbol>
+    <symbol id="i-play" viewBox="0 0 24 24">
+      <polygon points="7 4 19 12 7 20 7 4" />
+    </symbol>
+    <symbol id="i-rotate" viewBox="0 0 24 24">
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+      <path d="M3 3v5h5" />
+    </symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24">
+      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+      <line x1="4" y1="22" x2="4" y2="15" />
+    </symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24">
+      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24">
+      <path d="M3 6h18" />
+      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+    </symbol>
+    <symbol id="i-x" viewBox="0 0 24 24">
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24">
+      <path d="M5 12h14" />
+      <path d="m12 5 7 7-7 7" />
+    </symbol>
+    <symbol id="i-chevron-right" viewBox="0 0 24 24">
+      <path d="m9 18 6-6-6-6" />
+    </symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24">
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4" />
+      <path d="M8 2v4" />
+      <path d="M3 10h18" />
+    </symbol>
+    <symbol id="i-ball" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="10" />
+      <path d="m12 7.5 4.3 3.1-1.6 5h-5.4l-1.6-5z" />
+      <path d="M12 7.5V2.5" />
+      <path d="m16.3 10.6 4.8-1.6" />
+      <path d="m14.7 15.6 2.9 4.1" />
+      <path d="m9.3 15.6-2.9 4.1" />
+      <path d="M7.7 10.6 2.9 9" />
+    </symbol>
+    <symbol id="i-crown" viewBox="0 0 24 24">
+      <path d="M2.5 18h19l-2-11-5 5-2.5-7-2.5 7-5-5z" />
+    </symbol>
+    <symbol id="i-target" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="2" />
+    </symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24">
+      <rect width="18" height="11" x="3" y="11" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24">
+      <path d="M20 7h-9" />
+      <path d="M14 17H5" />
+      <circle cx="17" cy="17" r="3" />
+      <circle cx="7" cy="7" r="3" />
+    </symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24">
+      <path d="M3 3v18h18" />
+      <path d="M7 16v-4" />
+      <path d="M12 16V8" />
+      <path d="M17 16v-7" />
+    </symbol>
+    <symbol id="i-star" viewBox="0 0 24 24">
+      <polygon
+        points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+    </symbol>
+    <symbol id="i-check" viewBox="0 0 24 24">
+      <polyline points="20 6 9 17 4 12" />
+    </symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24">
+      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+      <path d="m15 5 4 4" />
+    </symbol>
   </svg>
 
   <!-- ==================== HEADER ==================== -->
   <header class="app-header">
     <div class="header-container">
-      <div class="brand" id="header-brand-logo" data-screen="dashboard" role="button" tabindex="0" aria-label="FutRaiz — dashboard">
-        <svg class="brand-mark" aria-hidden="true"><use href="#logo-mark"/></svg>
+      <div class="brand" id="header-brand-logo" data-screen="dashboard" role="button" tabindex="0"
+        aria-label="FutRaiz — dashboard">
+        <svg class="brand-mark" aria-hidden="true">
+          <use href="#logo-mark" />
+        </svg>
         <div class="brand-titles">
           <span class="brand-text">FutRaiz</span>
           <span class="brand-sub">
@@ -99,14 +224,20 @@
 
       <div class="header-actions">
         <div id="header-futebol-info" class="header-futebol-info" style="display: none;">
-          <button type="button" class="id-pill" id="btn-share-link" title="Copiar link público" aria-label="Copiar link público do futebol">
+          <button type="button" class="id-pill" id="btn-share-link" title="Copiar link público"
+            aria-label="Copiar link público do futebol">
             <span class="id-pill-label">ID</span>
             <span class="id-pill-code" id="header-futebol-code">FDT-XXXX</span>
-            <svg class="i i-sm" aria-hidden="true"><use href="#i-copy"/></svg>
+            <svg class="i i-sm" aria-hidden="true">
+              <use href="#i-copy" />
+            </svg>
           </button>
         </div>
-        <button type="button" id="btn-trocar-futebol" class="btn btn-ghost btn-sm" style="display: none;" aria-label="Sair do futebol atual" title="Sair do futebol atual">
-          <svg class="i" aria-hidden="true"><use href="#i-logout"/></svg>
+        <button type="button" id="btn-trocar-futebol" class="btn btn-ghost btn-sm" style="display: none;"
+          aria-label="Sair do futebol atual" title="Sair do futebol atual">
+          <svg class="i" aria-hidden="true">
+            <use href="#i-logout" />
+          </svg>
           <span class="btn-label">Sair</span>
         </button>
       </div>
@@ -117,7 +248,9 @@
   <main class="app-main">
 
     <div id="public-viewer-banner" class="public-banner" style="display: none;" role="status">
-      <svg class="i" aria-hidden="true"><use href="#i-eye"/></svg>
+      <svg class="i" aria-hidden="true">
+        <use href="#i-eye" />
+      </svg>
       <p class="public-banner-text">
         <strong>Modo espectador</strong> · <span id="public-banner-fut-name">Futebol</span>
         <span id="public-banner-fut-code" class="code-tag">FDT-XXXX</span>
@@ -129,7 +262,9 @@
     <section id="screen-landing" class="app-screen active">
       <div class="landing-hero">
         <div class="landing-pitch" aria-hidden="true"></div>
-        <svg class="landing-mark" aria-hidden="true"><use href="#logo-mark"/></svg>
+        <svg class="landing-mark" aria-hidden="true">
+          <use href="#logo-mark" />
+        </svg>
         <span class="eyebrow">Gestão de pelada</span>
         <h1 class="landing-title">FutRaiz</h1>
         <p class="landing-subtitle">Sorteio equilibrado, placar ao vivo e estatísticas do seu futebol semanal.</p>
@@ -137,24 +272,32 @@
         <div class="landing-actions">
           <article class="landing-card">
             <div class="landing-card-head">
-              <span class="icon-box"><svg class="i" aria-hidden="true"><use href="#i-whistle"/></svg></span>
+              <span class="icon-box"><svg class="i" aria-hidden="true">
+                  <use href="#i-whistle" />
+                </svg></span>
               <h2 class="landing-card-title">Criar meu futebol</h2>
             </div>
             <p class="landing-card-text">Você vira administrador e recebe um ID para compartilhar com o grupo.</p>
             <button type="button" id="btn-open-create-futebol" class="btn btn-primary btn-block">
-              <svg class="i" aria-hidden="true"><use href="#i-plus"/></svg>
+              <svg class="i" aria-hidden="true">
+                <use href="#i-plus" />
+              </svg>
               <span>Criar meu futebol</span>
             </button>
           </article>
 
           <article class="landing-card">
             <div class="landing-card-head">
-              <span class="icon-box"><svg class="i" aria-hidden="true"><use href="#i-eye"/></svg></span>
+              <span class="icon-box"><svg class="i" aria-hidden="true">
+                  <use href="#i-eye" />
+                </svg></span>
               <h2 class="landing-card-title">Entrar em um futebol</h2>
             </div>
             <p class="landing-card-text">Digite o ID recebido para acompanhar placar, tabela e rankings.</p>
             <button type="button" id="btn-open-enter-futebol" class="btn btn-secondary btn-block">
-              <svg class="i" aria-hidden="true"><use href="#i-arrow-right"/></svg>
+              <svg class="i" aria-hidden="true">
+                <use href="#i-arrow-right" />
+              </svg>
               <span>Entrar com ID</span>
             </button>
           </article>
@@ -166,9 +309,15 @@
         </div>
 
         <ul class="landing-features" aria-label="Recursos">
-          <li><svg class="i" aria-hidden="true"><use href="#i-shuffle"/></svg> 4 times equilibrados por estrelas</li>
-          <li><svg class="i" aria-hidden="true"><use href="#i-whistle"/></svg> Cronômetro e placar em tempo real</li>
-          <li><svg class="i" aria-hidden="true"><use href="#i-chart"/></svg> Tabela, artilharia e capa</li>
+          <li><svg class="i" aria-hidden="true">
+              <use href="#i-shuffle" />
+            </svg> 4 times equilibrados por estrelas</li>
+          <li><svg class="i" aria-hidden="true">
+              <use href="#i-whistle" />
+            </svg> Cronômetro e placar em tempo real</li>
+          <li><svg class="i" aria-hidden="true">
+              <use href="#i-chart" />
+            </svg> Tabela, artilharia e capa</li>
         </ul>
       </div>
     </section>
@@ -181,7 +330,9 @@
           <h1 class="page-title" id="dash-hero-title">Painel</h1>
           <div class="page-meta">
             <span class="meta-item">
-              <svg class="i i-sm" aria-hidden="true"><use href="#i-calendar"/></svg>
+              <svg class="i i-sm" aria-hidden="true">
+                <use href="#i-calendar" />
+              </svg>
               <span id="dash-round-date-tag">Hoje</span>
             </span>
             <span id="dash-round-status-label" class="badge">Rodada não configurada</span>
@@ -189,15 +340,21 @@
         </div>
         <div class="page-head-actions action-bar admin-only">
           <button type="button" id="dash-cta-config" class="btn btn-secondary btn-sm" data-screen="configuracoes">
-            <svg class="i" aria-hidden="true"><use href="#i-settings"/></svg>
+            <svg class="i" aria-hidden="true">
+              <use href="#i-settings" />
+            </svg>
             <span>Configurações</span>
           </button>
           <button type="button" id="dash-cta-draw" class="btn btn-secondary btn-sm">
-            <svg class="i" aria-hidden="true"><use href="#i-shuffle"/></svg>
+            <svg class="i" aria-hidden="true">
+              <use href="#i-shuffle" />
+            </svg>
             <span>Rodada</span>
           </button>
           <button type="button" id="dash-cta-match" class="btn btn-primary btn-sm">
-            <svg class="i" aria-hidden="true"><use href="#i-whistle"/></svg>
+            <svg class="i" aria-hidden="true">
+              <use href="#i-whistle" />
+            </svg>
             <span>Ir para partida</span>
           </button>
         </div>
@@ -207,19 +364,27 @@
 
       <div class="stats-grid">
         <div class="stat">
-          <span class="stat-label"><svg class="i i-sm" aria-hidden="true"><use href="#i-users"/></svg>Jogadores</span>
+          <span class="stat-label"><svg class="i i-sm" aria-hidden="true">
+              <use href="#i-users" />
+            </svg>Jogadores</span>
           <span id="dash-stat-players" class="stat-value">0</span>
         </div>
         <div class="stat">
-          <span class="stat-label"><svg class="i i-sm" aria-hidden="true"><use href="#i-whistle"/></svg>Partidas hoje</span>
+          <span class="stat-label"><svg class="i i-sm" aria-hidden="true">
+              <use href="#i-whistle" />
+            </svg>Partidas hoje</span>
           <span id="dash-stat-matches-today" class="stat-value">0</span>
         </div>
         <div class="stat">
-          <span class="stat-label"><svg class="i i-sm" aria-hidden="true"><use href="#i-ball"/></svg>Gols hoje</span>
+          <span class="stat-label"><svg class="i i-sm" aria-hidden="true">
+              <use href="#i-ball" />
+            </svg>Gols hoje</span>
           <span id="dash-stat-goals-today" class="stat-value">0</span>
         </div>
         <div class="stat">
-          <span class="stat-label"><svg class="i i-sm" aria-hidden="true"><use href="#i-target"/></svg>Artilheiro</span>
+          <span class="stat-label"><svg class="i i-sm" aria-hidden="true">
+              <use href="#i-target" />
+            </svg>Artilheiro</span>
           <span id="dash-stat-top-scorer" class="stat-value stat-value-text">—</span>
         </div>
       </div>
@@ -238,11 +403,15 @@
           </div>
           <ul class="kv-list">
             <li>
-              <span class="kv-key"><svg class="i i-sm" aria-hidden="true"><use href="#i-table"/></svg>Líder da tabela</span>
+              <span class="kv-key"><svg class="i i-sm" aria-hidden="true">
+                  <use href="#i-table" />
+                </svg>Líder da tabela</span>
               <span id="dash-stat-leader" class="kv-value">Nenhum jogo</span>
             </li>
             <li>
-              <span class="kv-key"><svg class="i i-sm" aria-hidden="true"><use href="#i-crown"/></svg>Líder de capa</span>
+              <span class="kv-key"><svg class="i i-sm" aria-hidden="true">
+                  <use href="#i-crown" />
+                </svg>Líder de capa</span>
               <span id="dash-stat-top-capa" class="kv-value">Nenhuma vitória</span>
             </li>
           </ul>
@@ -251,7 +420,8 @@
         <div class="card" id="dash-standings-preview-card">
           <div class="card-head" style="display: flex; justify-content: space-between; align-items: center;">
             <h2 class="card-title">Classificação</h2>
-            <button type="button" class="btn-link" data-screen="tabela" style="font-size: 0.8rem; font-weight: 700; cursor: pointer;">Ver tabela completa &rarr;</button>
+            <button type="button" class="btn-link" data-screen="tabela"
+              style="font-size: 0.8rem; font-weight: 700; cursor: pointer;">Ver tabela completa &rarr;</button>
           </div>
           <div id="dash-standings-body"></div>
         </div>
@@ -262,23 +432,33 @@
           </div>
           <div class="dash-admin-shortcuts" style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
             <button type="button" class="btn btn-secondary btn-sm" data-screen="configuracoes">
-              <svg class="i i-sm" aria-hidden="true"><use href="#i-settings"/></svg>
+              <svg class="i i-sm" aria-hidden="true">
+                <use href="#i-settings" />
+              </svg>
               <span>Configurações</span>
             </button>
             <button type="button" class="btn btn-secondary btn-sm" data-screen="jogadores">
-              <svg class="i i-sm" aria-hidden="true"><use href="#i-users"/></svg>
+              <svg class="i i-sm" aria-hidden="true">
+                <use href="#i-users" />
+              </svg>
               <span>Jogadores</span>
             </button>
             <button type="button" class="btn btn-secondary btn-sm" data-screen="sorteio">
-              <svg class="i i-sm" aria-hidden="true"><use href="#i-shuffle"/></svg>
+              <svg class="i i-sm" aria-hidden="true">
+                <use href="#i-shuffle" />
+              </svg>
               <span>Rodada / Sorteio</span>
             </button>
             <button type="button" class="btn btn-secondary btn-sm" data-screen="historico">
-              <svg class="i i-sm" aria-hidden="true"><use href="#i-history"/></svg>
+              <svg class="i i-sm" aria-hidden="true">
+                <use href="#i-history" />
+              </svg>
               <span>Histórico</span>
             </button>
             <button type="button" class="btn btn-secondary btn-sm" data-screen="rankings">
-              <svg class="i i-sm" aria-hidden="true"><use href="#i-trophy"/></svg>
+              <svg class="i i-sm" aria-hidden="true">
+                <use href="#i-trophy" />
+              </svg>
               <span>Rankings</span>
             </button>
           </div>
@@ -295,7 +475,9 @@
             <p class="settings-text">Apaga jogadores, rodadas, histórico e rankings. Não pode ser desfeito.</p>
           </div>
           <button type="button" id="btn-reset-data" class="btn btn-danger btn-sm admin-only" style="display: none;">
-            <svg class="i" aria-hidden="true"><use href="#i-trash"/></svg>
+            <svg class="i" aria-hidden="true">
+              <use href="#i-trash" />
+            </svg>
             <span>Zerar dados</span>
           </button>
         </div>
@@ -319,17 +501,33 @@
           <form id="form-jogador" class="form-stack">
             <div class="form-group">
               <label for="player-name">Nome</label>
-              <input type="text" id="player-name" class="form-control" placeholder="Ex: Roberto Carlos" required maxlength="40" autocomplete="off">
+              <input type="text" id="player-name" class="form-control" placeholder="Ex: Roberto Carlos" required
+                maxlength="40" autocomplete="off">
             </div>
 
             <div class="form-group">
               <label id="star-label">Nível técnico</label>
               <div class="star-input" id="star-rating-select" role="group" aria-labelledby="star-label">
-                <button type="button" class="star-btn active" data-value="1" aria-label="1 estrela"><svg class="i i-sm" aria-hidden="true"><use href="#i-star"/></svg></button>
-                <button type="button" class="star-btn active" data-value="2" aria-label="2 estrelas"><svg class="i i-sm" aria-hidden="true"><use href="#i-star"/></svg></button>
-                <button type="button" class="star-btn active" data-value="3" aria-label="3 estrelas"><svg class="i i-sm" aria-hidden="true"><use href="#i-star"/></svg></button>
-                <button type="button" class="star-btn" data-value="4" aria-label="4 estrelas"><svg class="i i-sm" aria-hidden="true"><use href="#i-star"/></svg></button>
-                <button type="button" class="star-btn" data-value="5" aria-label="5 estrelas"><svg class="i i-sm" aria-hidden="true"><use href="#i-star"/></svg></button>
+                <button type="button" class="star-btn active" data-value="1" aria-label="1 estrela"><svg class="i i-sm"
+                    aria-hidden="true">
+                    <use href="#i-star" />
+                  </svg></button>
+                <button type="button" class="star-btn active" data-value="2" aria-label="2 estrelas"><svg class="i i-sm"
+                    aria-hidden="true">
+                    <use href="#i-star" />
+                  </svg></button>
+                <button type="button" class="star-btn active" data-value="3" aria-label="3 estrelas"><svg class="i i-sm"
+                    aria-hidden="true">
+                    <use href="#i-star" />
+                  </svg></button>
+                <button type="button" class="star-btn" data-value="4" aria-label="4 estrelas"><svg class="i i-sm"
+                    aria-hidden="true">
+                    <use href="#i-star" />
+                  </svg></button>
+                <button type="button" class="star-btn" data-value="5" aria-label="5 estrelas"><svg class="i i-sm"
+                    aria-hidden="true">
+                    <use href="#i-star" />
+                  </svg></button>
               </div>
               <input type="hidden" id="player-stars" value="3">
               <small class="form-help">1 iniciante · 3 médio · 5 craque</small>
@@ -339,7 +537,8 @@
               <button type="submit" class="btn btn-primary" id="player-submit-btn">
                 <span>Cadastrar</span>
               </button>
-              <button type="button" class="btn btn-ghost" id="player-cancel-edit" style="display: none;">Cancelar</button>
+              <button type="button" class="btn btn-ghost" id="player-cancel-edit"
+                style="display: none;">Cancelar</button>
             </div>
           </form>
 
@@ -351,8 +550,11 @@
         <div class="card card-flush">
           <div class="list-toolbar">
             <div class="search-field">
-              <svg class="i i-sm search-icon" aria-hidden="true"><use href="#i-search"/></svg>
-              <input type="search" id="players-search" class="form-control" placeholder="Buscar jogador" aria-label="Buscar jogador">
+              <svg class="i i-sm search-icon" aria-hidden="true">
+                <use href="#i-search" />
+              </svg>
+              <input type="search" id="players-search" class="form-control" placeholder="Buscar jogador"
+                aria-label="Buscar jogador">
             </div>
             <select id="players-filter-stars" class="form-control select-compact" aria-label="Filtrar por estrelas">
               <option value="0">Todas</option>
@@ -374,15 +576,20 @@
         <div class="page-head-main">
           <span class="eyebrow">Rodada</span>
           <h2 class="page-title" id="sorteio-header-title">Sorteio da rodada</h2>
-          <p class="page-subtitle" id="sorteio-header-subtitle">Selecione 20 jogadores para formar 4 times equilibrados.</p>
+          <p class="page-subtitle" id="sorteio-header-subtitle">Selecione 20 jogadores para formar 4 times equilibrados.
+          </p>
         </div>
         <div class="page-head-actions action-bar admin-only">
           <button type="button" id="btn-alterar-selecao" class="btn btn-secondary btn-sm" style="display: none;">
-            <svg class="i" aria-hidden="true"><use href="#i-users"/></svg>
+            <svg class="i" aria-hidden="true">
+              <use href="#i-users" />
+            </svg>
             <span>Alterar seleção</span>
           </button>
           <button type="button" id="btn-nova-rodada" class="btn btn-secondary btn-sm" style="display: none;">
-            <svg class="i" aria-hidden="true"><use href="#i-rotate"/></svg>
+            <svg class="i" aria-hidden="true">
+              <use href="#i-rotate" />
+            </svg>
             <span>Nova rodada</span>
           </button>
         </div>
@@ -391,23 +598,32 @@
       <div id="round-selection-panel" class="card card-flush admin-only">
         <div class="selection-head">
           <div class="selection-count">
-            <span class="selection-count-num"><span id="selected-players-count">0</span><span class="selection-count-total"> / 20</span></span>
+            <span class="selection-count-num"><span id="selected-players-count">0</span><span
+                class="selection-count-total"> / 20</span></span>
             <span class="selection-count-label">Jogadores</span>
           </div>
           <div class="selection-progress">
-            <div class="progress"><div id="selection-progress-bar" class="progress-fill" style="width: 0%;"></div></div>
-            <span id="selection-status-badge" class="status-text status-warning">Selecione 20 jogadores para realizar o sorteio</span>
+            <div class="progress">
+              <div id="selection-progress-bar" class="progress-fill" style="width: 0%;"></div>
+            </div>
+            <span id="selection-status-badge" class="status-text status-warning">Selecione 20 jogadores para realizar o
+              sorteio</span>
           </div>
           <button type="button" id="btn-realizar-sorteio" class="btn btn-primary" disabled>
-            <svg class="i" aria-hidden="true"><use href="#i-shuffle"/></svg>
+            <svg class="i" aria-hidden="true">
+              <use href="#i-shuffle" />
+            </svg>
             <span>Sortear times</span>
           </button>
         </div>
 
         <div class="list-toolbar list-toolbar-wrap">
           <div class="search-field">
-            <svg class="i i-sm search-icon" aria-hidden="true"><use href="#i-search"/></svg>
-            <input type="search" id="round-player-search" class="form-control" placeholder="Buscar jogador" aria-label="Buscar jogador na seleção">
+            <svg class="i i-sm search-icon" aria-hidden="true">
+              <use href="#i-search" />
+            </svg>
+            <input type="search" id="round-player-search" class="form-control" placeholder="Buscar jogador"
+              aria-label="Buscar jogador na seleção">
           </div>
           <div class="chips" id="round-star-chips" role="group" aria-label="Filtrar por estrelas">
             <button type="button" class="chip-filter active" data-star="0">Todos</button>
@@ -436,12 +652,16 @@
     <section id="screen-partida" class="app-screen">
       <div id="partida-container">
         <div id="partida-empty-state" class="empty-state" style="display: block;">
-          <span class="empty-icon"><svg class="i" aria-hidden="true"><use href="#i-shuffle"/></svg></span>
+          <span class="empty-icon"><svg class="i" aria-hidden="true">
+              <use href="#i-shuffle" />
+            </svg></span>
           <h3>Times ainda não sorteados</h3>
           <p>Faça o sorteio da rodada para liberar placar e cronômetro.</p>
           <button type="button" class="btn btn-primary btn-sm admin-only" id="btn-ir-sorteio-partida">
             <span>Ir para rodada</span>
-            <svg class="i" aria-hidden="true"><use href="#i-arrow-right"/></svg>
+            <svg class="i" aria-hidden="true">
+              <use href="#i-arrow-right" />
+            </svg>
           </button>
         </div>
 
@@ -450,7 +670,8 @@
           <div class="match-setup">
             <div class="setup-field">
               <span class="setup-label">Modelo</span>
-              <span class="status-tag status-live" style="font-weight: 800; font-size: 0.78rem; letter-spacing: 0.5px;">QUEM GANHA FICA</span>
+              <span class="status-tag status-live"
+                style="font-weight: 800; font-size: 0.78rem; letter-spacing: 0.5px;">QUEM GANHA FICA</span>
               <select id="match-fixture-select" style="display: none;"></select>
               <span id="match-fixture-label-public" class="setup-public" style="display: none;"></span>
             </div>
@@ -465,7 +686,8 @@
                   <option value="20">20 min</option>
                   <option value="custom">Outro</option>
                 </select>
-                <input type="number" id="match-duration-custom" class="form-control input-mini" style="display: none;" min="1" max="90" placeholder="Min" aria-label="Minutos personalizados">
+                <input type="number" id="match-duration-custom" class="form-control input-mini" style="display: none;"
+                  min="1" max="90" placeholder="Min" aria-label="Minutos personalizados">
               </div>
             </div>
           </div>
@@ -519,12 +741,17 @@
                 <button type="button" class="btn btn-secondary" id="btn-timer-pause" style="display: none;">
                   <span>PAUSAR</span>
                 </button>
-                <button type="button" class="btn btn-ghost btn-square" id="btn-timer-reset" title="Reiniciar cronômetro" aria-label="Reiniciar cronômetro">
-                  <svg class="i" aria-hidden="true"><use href="#i-rotate"/></svg>
+                <button type="button" class="btn btn-ghost btn-square" id="btn-timer-reset" title="Reiniciar cronômetro"
+                  aria-label="Reiniciar cronômetro">
+                  <svg class="i" aria-hidden="true">
+                    <use href="#i-rotate" />
+                  </svg>
                 </button>
               </div>
               <button type="button" class="btn btn-danger" id="btn-timer-finish">
-                <svg class="i" aria-hidden="true"><use href="#i-flag"/></svg>
+                <svg class="i" aria-hidden="true">
+                  <use href="#i-flag" />
+                </svg>
                 <span>Finalizar</span>
               </button>
             </div>
@@ -603,15 +830,20 @@
           <form id="form-settings-futebol" class="form-stack">
             <div class="form-group">
               <label for="settings-fut-name">Nome do futebol</label>
-              <input type="text" id="settings-fut-name" class="form-control" placeholder="Ex: Pelada de Quarta" required maxlength="50" autocomplete="off">
+              <input type="text" id="settings-fut-name" class="form-control" placeholder="Ex: Pelada de Quarta" required
+                maxlength="50" autocomplete="off">
             </div>
 
             <div class="form-group">
               <label for="settings-fut-code">Código público</label>
               <div style="display: flex; gap: 0.5rem;">
-                <input type="text" id="settings-fut-code" class="form-control input-code" readonly style="letter-spacing: 2px; font-weight: 700; background: var(--bg-surface-elevated, #0d1a2d);">
-                <button type="button" id="btn-settings-copy-code" class="btn btn-secondary btn-square" title="Copiar código" aria-label="Copiar código">
-                  <svg class="i" aria-hidden="true"><use href="#i-copy"/></svg>
+                <input type="text" id="settings-fut-code" class="form-control input-code" readonly
+                  style="letter-spacing: 2px; font-weight: 700; background: var(--bg-surface-elevated, #0d1a2d);">
+                <button type="button" id="btn-settings-copy-code" class="btn btn-secondary btn-square"
+                  title="Copiar código" aria-label="Copiar código">
+                  <svg class="i" aria-hidden="true">
+                    <use href="#i-copy" />
+                  </svg>
                 </button>
               </div>
               <small class="form-help">Código público de acesso exclusivo para visitantes.</small>
@@ -622,7 +854,9 @@
                 <span>Salvar alterações</span>
               </button>
               <button type="button" id="btn-settings-share-link" class="btn btn-secondary">
-                <svg class="i" aria-hidden="true"><use href="#i-share"/></svg>
+                <svg class="i" aria-hidden="true">
+                  <use href="#i-share" />
+                </svg>
                 <span>Compartilhar link</span>
               </button>
             </div>
@@ -651,7 +885,8 @@
 
             <div class="form-group" id="settings-custom-duration-group" style="display: none;">
               <label for="settings-custom-duration-input">Minutos personalizados</label>
-              <input type="number" id="settings-custom-duration-input" class="form-control" min="1" max="90" placeholder="Ex: 8" value="7">
+              <input type="number" id="settings-custom-duration-input" class="form-control" min="1" max="90"
+                placeholder="Ex: 8" value="7">
             </div>
 
             <div class="form-actions">
@@ -661,11 +896,16 @@
             </div>
           </form>
 
-          <div style="margin-top: 2rem; border-top: 1px solid var(--border-subtle, rgba(255,255,255,0.08)); padding-top: 1.25rem;">
-            <h4 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 0.4rem; color: var(--danger, #ff4d4f);">Zona de Perigo</h4>
-            <p class="settings-text" style="margin-bottom: 0.85rem;">Apaga jogadores, rodadas, histórico e rankings deste futebol.</p>
+          <div
+            style="margin-top: 2rem; border-top: 1px solid var(--border-subtle, rgba(255,255,255,0.08)); padding-top: 1.25rem;">
+            <h4 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 0.4rem; color: var(--danger, #ff4d4f);">Zona
+              de Perigo</h4>
+            <p class="settings-text" style="margin-bottom: 0.85rem;">Apaga jogadores, rodadas, histórico e rankings
+              deste futebol.</p>
             <button type="button" id="btn-settings-reset-data" class="btn btn-danger btn-sm admin-only">
-              <svg class="i" aria-hidden="true"><use href="#i-trash"/></svg>
+              <svg class="i" aria-hidden="true">
+                <use href="#i-trash" />
+              </svg>
               <span>Zerar dados</span>
             </button>
           </div>
@@ -673,11 +913,13 @@
 
         <!-- Seção 3: Dados Históricos Iniciais (Carga Única Pré-FutRoda) -->
         <div class="card form-card" id="card-dados-historicos" style="grid-column: 1 / -1;">
-          <div class="card-head" style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.75rem;">
+          <div class="card-head"
+            style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.75rem;">
             <div>
               <h3 class="card-title">Dados Históricos Iniciais</h3>
               <p class="settings-text" style="margin-top: 0.35rem; max-width: 650px;">
-                Cadastre os gols e Capas que os jogadores já possuíam antes do uso do FutRoda. Essa informação pode ser preenchida apenas uma vez.
+                Cadastre os gols e Capas que os jogadores já possuíam antes do uso do FutRoda. Essa informação pode ser
+                preenchida apenas uma vez.
               </p>
             </div>
             <div id="status-historico-badge-wrap"></div>
@@ -685,9 +927,11 @@
 
           <div id="aviso-historico-wrap" style="margin: 0.75rem 0 1rem 0;"></div>
 
-          <div id="tabela-historico-wrap" class="sports-table-wrapper" style="overflow-x: auto; margin-bottom: 1rem;"></div>
+          <div id="tabela-historico-wrap" class="sports-table-wrapper" style="overflow-x: auto; margin-bottom: 1rem;">
+          </div>
 
-          <div id="actions-historico-wrap" class="form-actions" style="margin-top: 1.25rem; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;"></div>
+          <div id="actions-historico-wrap" class="form-actions"
+            style="margin-top: 1.25rem; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;"></div>
         </div>
       </div>
     </section>
@@ -697,66 +941,99 @@
   <!-- ==================== NAVEGAÇÃO INFERIOR (MOBILE) ==================== -->
   <nav class="bottom-nav" id="bottom-nav" aria-label="Navegação">
     <button type="button" class="nav-item active admin-only" data-screen="dashboard">
-      <svg class="i" aria-hidden="true"><use href="#i-home"/></svg>
+      <svg class="i" aria-hidden="true">
+        <use href="#i-home" />
+      </svg>
       <span>Início</span>
     </button>
     <button type="button" class="nav-item admin-only" data-screen="jogadores">
-      <svg class="i" aria-hidden="true"><use href="#i-users"/></svg>
+      <svg class="i" aria-hidden="true">
+        <use href="#i-users" />
+      </svg>
       <span>Jogadores</span>
     </button>
     <button type="button" class="nav-item admin-only" data-screen="sorteio">
-      <svg class="i" aria-hidden="true"><use href="#i-shuffle"/></svg>
+      <svg class="i" aria-hidden="true">
+        <use href="#i-shuffle" />
+      </svg>
       <span>Rodada</span>
     </button>
     <button type="button" class="nav-item" data-screen="partida">
-      <svg class="i" aria-hidden="true"><use href="#i-whistle"/></svg>
+      <svg class="i" aria-hidden="true">
+        <use href="#i-whistle" />
+      </svg>
       <span>Partida</span>
     </button>
     <button type="button" class="nav-item" data-screen="tabela">
-      <svg class="i" aria-hidden="true"><use href="#i-table"/></svg>
+      <svg class="i" aria-hidden="true">
+        <use href="#i-table" />
+      </svg>
       <span>Tabela</span>
     </button>
     <button type="button" class="nav-item" id="btn-bottom-more" aria-haspopup="dialog">
-      <svg class="i" aria-hidden="true"><use href="#i-more"/></svg>
+      <svg class="i" aria-hidden="true">
+        <use href="#i-more" />
+      </svg>
       <span>Mais</span>
     </button>
   </nav>
 
   <!-- Sheet "Mais" -->
-  <div class="modal modal-sheet-wrap" id="modal-more-menu" role="dialog" aria-modal="true" aria-labelledby="more-menu-title">
+  <div class="modal modal-sheet-wrap" id="modal-more-menu" role="dialog" aria-modal="true"
+    aria-labelledby="more-menu-title">
     <div class="modal-backdrop"></div>
     <div class="modal-card modal-sheet">
       <div class="modal-header">
         <h3 id="more-menu-title">Mais</h3>
-        <button type="button" class="btn-close" data-close aria-label="Fechar"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button>
+        <button type="button" class="btn-close" data-close aria-label="Fechar"><svg class="i" aria-hidden="true">
+            <use href="#i-x" />
+          </svg></button>
       </div>
       <div class="menu-list">
         <button type="button" class="menu-item" data-screen="rankings" data-close>
-          <svg class="i" aria-hidden="true"><use href="#i-trophy"/></svg>
+          <svg class="i" aria-hidden="true">
+            <use href="#i-trophy" />
+          </svg>
           <span>Rankings</span>
-          <svg class="i i-sm menu-chevron" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+          <svg class="i i-sm menu-chevron" aria-hidden="true">
+            <use href="#i-chevron-right" />
+          </svg>
         </button>
         <button type="button" class="menu-item" data-screen="historico" data-close>
-          <svg class="i" aria-hidden="true"><use href="#i-history"/></svg>
+          <svg class="i" aria-hidden="true">
+            <use href="#i-history" />
+          </svg>
           <span>Histórico</span>
-          <svg class="i i-sm menu-chevron" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+          <svg class="i i-sm menu-chevron" aria-hidden="true">
+            <use href="#i-chevron-right" />
+          </svg>
         </button>
         <span class="menu-section">Configurações</span>
         <button type="button" class="menu-item admin-only" data-screen="configuracoes" data-close>
-          <svg class="i" aria-hidden="true"><use href="#i-settings"/></svg>
+          <svg class="i" aria-hidden="true">
+            <use href="#i-settings" />
+          </svg>
           <span>Configurações</span>
-          <svg class="i i-sm menu-chevron" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+          <svg class="i i-sm menu-chevron" aria-hidden="true">
+            <use href="#i-chevron-right" />
+          </svg>
         </button>
         <button type="button" class="menu-item" id="btn-more-share" data-close>
-          <svg class="i" aria-hidden="true"><use href="#i-share"/></svg>
+          <svg class="i" aria-hidden="true">
+            <use href="#i-share" />
+          </svg>
           <span>Copiar link público</span>
         </button>
         <button type="button" class="menu-item menu-item-danger admin-only" id="btn-more-reset" data-close>
-          <svg class="i" aria-hidden="true"><use href="#i-trash"/></svg>
+          <svg class="i" aria-hidden="true">
+            <use href="#i-trash" />
+          </svg>
           <span>Zerar dados</span>
         </button>
         <button type="button" class="menu-item" id="btn-more-trocar" data-close>
-          <svg class="i" aria-hidden="true"><use href="#i-logout"/></svg>
+          <svg class="i" aria-hidden="true">
+            <use href="#i-logout" />
+          </svg>
           <span>Sair do futebol</span>
         </button>
       </div>
@@ -771,12 +1048,15 @@
       <div class="modal-header">
         <div>
           <h3 class="modal-title" id="modal-goal-author-title">REGISTRAR GOL</h3>
-          <div id="modal-goal-team-badge" style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; margin-top: 0.15rem; letter-spacing: 0.5px;"></div>
+          <div id="modal-goal-team-badge"
+            style="font-size: 0.8rem; font-weight: 700; text-transform: uppercase; margin-top: 0.15rem; letter-spacing: 0.5px;">
+          </div>
         </div>
         <button type="button" class="btn-close" data-close aria-label="Fechar">&times;</button>
       </div>
       <div class="modal-body">
-        <p class="modal-desc" style="margin-bottom: 1rem; font-weight: 600; color: var(--text-main); font-size: 0.95rem;">
+        <p class="modal-desc"
+          style="margin-bottom: 1rem; font-weight: 600; color: var(--text-main); font-size: 0.95rem;">
           Quem marcou o gol?
         </p>
         <div id="modal-goal-players-list"></div>
@@ -795,26 +1075,32 @@
     <div class="modal-card">
       <div class="modal-header">
         <h3 id="mcf-title">Criar meu futebol</h3>
-        <button type="button" class="btn-close" data-close aria-label="Fechar"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button>
+        <button type="button" class="btn-close" data-close aria-label="Fechar"><svg class="i" aria-hidden="true">
+            <use href="#i-x" />
+          </svg></button>
       </div>
       <div class="modal-body">
         <p class="modal-desc">Você será o administrador. Um ID exclusivo será gerado para compartilhar.</p>
         <form id="form-create-futebol" class="form-stack">
           <div class="form-group">
             <label for="create-fut-name">Nome do futebol</label>
-            <input type="text" id="create-fut-name" class="form-control" placeholder="Ex: Pelada de Quarta" required maxlength="50">
+            <input type="text" id="create-fut-name" class="form-control" placeholder="Ex: Pelada de Quarta" required
+              maxlength="50">
           </div>
           <div class="form-group">
             <label for="create-fut-admin-name">Seu nome</label>
-            <input type="text" id="create-fut-admin-name" class="form-control" placeholder="Ex: Carlos Silva" required maxlength="50">
+            <input type="text" id="create-fut-admin-name" class="form-control" placeholder="Ex: Carlos Silva" required
+              maxlength="50">
           </div>
           <div class="form-group">
             <label for="create-fut-email">E-mail</label>
-            <input type="email" id="create-fut-email" class="form-control" placeholder="admin@email.com" required autocomplete="email">
+            <input type="email" id="create-fut-email" class="form-control" placeholder="admin@email.com" required
+              autocomplete="email">
           </div>
           <div class="form-group">
             <label for="create-fut-password">Senha</label>
-            <input type="password" id="create-fut-password" class="form-control" placeholder="Mínimo 6 caracteres" minlength="6" required autocomplete="new-password">
+            <input type="password" id="create-fut-password" class="form-control" placeholder="Mínimo 6 caracteres"
+              minlength="6" required autocomplete="new-password">
           </div>
           <button type="submit" id="btn-submit-create-fut" class="btn btn-primary btn-block">Criar futebol</button>
         </form>
@@ -827,14 +1113,17 @@
     <div class="modal-card">
       <div class="modal-header">
         <h3 id="mef-title">Entrar em um futebol</h3>
-        <button type="button" class="btn-close" data-close aria-label="Fechar"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button>
+        <button type="button" class="btn-close" data-close aria-label="Fechar"><svg class="i" aria-hidden="true">
+            <use href="#i-x" />
+          </svg></button>
       </div>
       <div class="modal-body">
         <p class="modal-desc">Informe o ID fornecido pelo organizador para acompanhar em modo espectador.</p>
         <form id="form-enter-futebol" class="form-stack">
           <div class="form-group">
             <label for="enter-fut-code">ID do futebol</label>
-            <input type="text" id="enter-fut-code" class="form-control input-code" placeholder="FDT-XXXX" required maxlength="12" autocomplete="off" autocorrect="off" autocapitalize="characters">
+            <input type="text" id="enter-fut-code" class="form-control input-code" placeholder="FDT-XXXX" required
+              maxlength="12" autocomplete="off" autocorrect="off" autocapitalize="characters">
           </div>
           <button type="submit" id="btn-submit-enter-fut" class="btn btn-primary btn-block">Acessar</button>
         </form>
@@ -847,18 +1136,22 @@
     <div class="modal-card">
       <div class="modal-header">
         <h3 id="mla-title">Login do administrador</h3>
-        <button type="button" class="btn-close" data-close aria-label="Fechar"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button>
+        <button type="button" class="btn-close" data-close aria-label="Fechar"><svg class="i" aria-hidden="true">
+            <use href="#i-x" />
+          </svg></button>
       </div>
       <div class="modal-body">
         <p class="modal-desc">Acesse com as credenciais do seu futebol.</p>
         <form id="form-login-admin" class="form-stack">
           <div class="form-group">
             <label for="login-admin-email">E-mail</label>
-            <input type="email" id="login-admin-email" class="form-control" placeholder="admin@email.com" required autocomplete="email">
+            <input type="email" id="login-admin-email" class="form-control" placeholder="admin@email.com" required
+              autocomplete="email">
           </div>
           <div class="form-group">
             <label for="login-admin-password">Senha</label>
-            <input type="password" id="login-admin-password" class="form-control" placeholder="Sua senha" required autocomplete="current-password">
+            <input type="password" id="login-admin-password" class="form-control" placeholder="Sua senha" required
+              autocomplete="current-password">
           </div>
           <button type="submit" id="btn-submit-login-admin" class="btn btn-primary btn-block">Entrar</button>
         </form>
@@ -867,15 +1160,19 @@
   </div>
 
   <!-- Modal Confirmação de Finalização da Carga Histórica -->
-  <div class="modal" id="modal-confirm-finalize-historical" role="dialog" aria-modal="true" aria-labelledby="modal-finalize-hist-title">
+  <div class="modal" id="modal-confirm-finalize-historical" role="dialog" aria-modal="true"
+    aria-labelledby="modal-finalize-hist-title">
     <div class="modal-backdrop"></div>
     <div class="modal-card">
       <div class="modal-header">
         <h3 id="modal-finalize-hist-title">Finalizar Carga Histórica</h3>
-        <button type="button" class="btn-close" data-close aria-label="Fechar"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button>
+        <button type="button" class="btn-close" data-close aria-label="Fechar"><svg class="i" aria-hidden="true">
+            <use href="#i-x" />
+          </svg></button>
       </div>
       <div class="modal-body">
-        <p class="modal-desc" style="font-size: 1rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.75rem;">
+        <p class="modal-desc"
+          style="font-size: 1rem; font-weight: 600; color: var(--text-main); margin-bottom: 0.75rem;">
           Tem certeza que deseja finalizar a carga histórica?
         </p>
         <p class="text-muted" style="font-size: 0.88rem; line-height: 1.5;">
@@ -891,6 +1188,14 @@
     </div>
   </div>
 
+  <!-- Configuração Supabase -->
+  <script>
+    window.__SUPABASE_URL__ = 'https://bufbpmznfzikbrlmwxxt.supabase.co';
+    window.__SUPABASE_ANON_KEY__ = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1ZmJwbXpuZnppa2JybG13eHh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExNTQ3MDksImV4cCI6MjEwNjczMDcwOX0.47poDxvaUuyRIWMnzUWYozsT2admN1M9AEuJGtVZv38';
+  </script>
+
+  <!-- Aplicação -->
   <script type="module" src="./js/app.js"></script>
 </body>
+
 </html>
