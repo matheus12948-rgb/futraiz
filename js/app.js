@@ -86,8 +86,16 @@ export const App = {
 
     if (futMatch && futMatch[1]) {
       const code = futMatch[1];
-      console.log(`[App] Acessando futebol via URL pública: ${code}`);
-      const res = await Storage.loadPublicFutebol(code);
+      const normalizedCode = Storage.normalizePublicCode ? Storage.normalizePublicCode(code) : code.trim().toUpperCase();
+
+      if (Storage.currentFutebol && Storage.currentFutebol.codigo_publico === normalizedCode && Storage.isPublicViewer()) {
+        this.updateHeaderUI();
+        this.navigateTo('partida');
+        return;
+      }
+
+      console.log(`[App] Acessando futebol via URL pública: ${normalizedCode}`);
+      const res = await Storage.loadPublicFutebol(normalizedCode);
       if (res.success) {
         this.updateHeaderUI();
         Utils.toast(`Acessando ${res.futebol.nome} (Modo Público)`, 'info', 3000);
@@ -309,26 +317,52 @@ export const App = {
     if (formCreate) {
       formCreate.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (formCreate.dataset.submitting === 'true') return;
+        formCreate.dataset.submitting = 'true';
+
         const nome = document.getElementById('create-fut-name').value;
         const adminNome = document.getElementById('create-fut-admin-name').value;
         const email = document.getElementById('create-fut-email').value;
         const password = document.getElementById('create-fut-password').value;
 
         const btnSubmit = document.getElementById('btn-submit-create-fut');
-        if (btnSubmit) btnSubmit.disabled = true;
+        const originalBtnText = btnSubmit ? btnSubmit.innerHTML : 'Criar futebol';
+        if (btnSubmit) {
+          btnSubmit.disabled = true;
+          btnSubmit.innerHTML = '<span>Criando futebol...</span>';
+        }
 
-        const res = await Storage.createFutebol({ nome, adminNome, email, password });
-        if (btnSubmit) btnSubmit.disabled = false;
+        try {
+          const res = await Storage.createFutebol({ nome, adminNome, email, password });
 
-        if (res.success) {
-          Utils.closeModal('modal-create-futebol');
-          formCreate.reset();
-          Utils.toast(`Futebol "${res.futebol.nome}" criado com sucesso! ID: ${res.futebol.codigo_publico}`, 'success', 5000);
-          window.location.hash = '#/admin';
-          this.updateHeaderUI();
-          this.navigateTo('dashboard');
-        } else {
-          Utils.toast(`Erro ao criar futebol: ${res.error}`, 'error', 4500);
+          if (res && res.success) {
+            // FECHAR AUTOMATICAMENTE O MODAL SOMENTE QUANDO A CRIAÇÃO FOR CONCLUÍDA COM SUCESSO
+            Utils.closeModal('modal-create-futebol');
+            formCreate.reset();
+
+            const futNome = res.futebol?.nome || (nome ? nome.trim() : 'Futebol');
+            const futCodigo = res.futebol?.codigo_publico || '';
+            Utils.toast(`Futebol "${futNome}" criado com sucesso! ID: ${futCodigo}`, 'success', 5000);
+
+            window.location.hash = '#/admin';
+            this.updateHeaderUI();
+            this.navigateTo('dashboard');
+          } else {
+            // Em caso de erro (autenticação, confirmação pendente, RLS, rate limit, validação, etc.):
+            // O modal CONTINUA ABERTO para que o usuário possa visualizar a mensagem e corrigir/tentar novamente.
+            const errMsg = res?.error || 'Não foi possível criar o futebol.';
+            Utils.toast(errMsg, 'error', 6000);
+          }
+        } catch (err) {
+          // Em caso de exceção de rede/inesperada: parar loading e MANTER modal aberto
+          Utils.toast(`Erro ao criar futebol: ${err.message}`, 'error', 6000);
+        } finally {
+          // PARAR loading e restaurar botão e formulário para nova tentativa
+          if (btnSubmit) {
+            btnSubmit.disabled = false;
+            btnSubmit.innerHTML = originalBtnText;
+          }
+          formCreate.dataset.submitting = 'false';
         }
       });
     }
@@ -347,23 +381,34 @@ export const App = {
       formEnter.addEventListener('submit', async (e) => {
         e.preventDefault();
         const codeInput = document.getElementById('enter-fut-code');
-        const code = codeInput ? codeInput.value.trim().toUpperCase() : '';
+        const rawCode = codeInput ? codeInput.value : '';
 
         const btnSubmit = document.getElementById('btn-submit-enter-fut');
-        if (btnSubmit) btnSubmit.disabled = true;
+        const originalText = btnSubmit ? btnSubmit.innerHTML : 'Acessar';
+        if (btnSubmit) {
+          btnSubmit.disabled = true;
+          btnSubmit.innerHTML = '<span>Acessando...</span>';
+        }
 
-        const res = await Storage.loadPublicFutebol(code);
-        if (btnSubmit) btnSubmit.disabled = false;
-
-        if (res.success) {
-          Utils.closeModal('modal-enter-futebol');
-          formEnter.reset();
-          window.location.hash = `#/fut/${res.futebol.codigo_publico}`;
-          this.updateHeaderUI();
-          Utils.toast(`Conectado ao futebol "${res.futebol.nome}" (Somente Leitura)`, 'success', 4000);
-          this.navigateTo('partida');
-        } else {
+        try {
+          const res = await Storage.loadPublicFutebol(rawCode);
+          if (res.success) {
+            Utils.closeModal('modal-enter-futebol');
+            formEnter.reset();
+            window.location.hash = `#/fut/${res.futebol.codigo_publico}`;
+            this.updateHeaderUI();
+            Utils.toast(`Conectado ao futebol "${res.futebol.nome}" (Somente Leitura)`, 'success', 4000);
+            this.navigateTo('partida');
+          } else {
+            Utils.toast(res.error || 'Futebol não encontrado. Verifique o código e tente novamente.', 'warning', 4500);
+          }
+        } catch (err) {
           Utils.toast('Futebol não encontrado. Verifique o código e tente novamente.', 'warning', 4500);
+        } finally {
+          if (btnSubmit) {
+            btnSubmit.disabled = false;
+            btnSubmit.innerHTML = originalText;
+          }
         }
       });
     }
@@ -381,24 +426,39 @@ export const App = {
     if (formLogin) {
       formLogin.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (formLogin.dataset.submitting === 'true') return;
+        formLogin.dataset.submitting = 'true';
+
         const email = document.getElementById('login-admin-email').value;
         const password = document.getElementById('login-admin-password').value;
 
         const btnSubmit = document.getElementById('btn-submit-login-admin');
-        if (btnSubmit) btnSubmit.disabled = true;
+        const originalText = btnSubmit ? btnSubmit.innerHTML : 'Entrar';
+        if (btnSubmit) {
+          btnSubmit.disabled = true;
+          btnSubmit.innerHTML = '<span>Entrando...</span>';
+        }
 
-        const res = await Storage.loginAdmin({ email, password });
-        if (btnSubmit) btnSubmit.disabled = false;
-
-        if (res.success) {
-          Utils.closeModal('modal-login-admin');
-          formLogin.reset();
-          window.location.hash = '#/admin';
-          this.updateHeaderUI();
-          Utils.toast(`Bem-vindo, administrador do ${res.futebol.nome}!`, 'success', 4000);
-          this.navigateTo('dashboard');
-        } else {
-          Utils.toast(`Erro no login: ${res.error}`, 'error', 4500);
+        try {
+          const res = await Storage.loginAdmin({ email, password });
+          if (res.success) {
+            Utils.closeModal('modal-login-admin');
+            formLogin.reset();
+            window.location.hash = '#/admin';
+            this.updateHeaderUI();
+            Utils.toast(`Bem-vindo, administrador do ${res.futebol.nome}!`, 'success', 4000);
+            this.navigateTo('dashboard');
+          } else {
+            Utils.toast(`Erro no login: ${res.error}`, 'error', 5000);
+          }
+        } catch (err) {
+          Utils.toast(`Erro no login: ${err.message}`, 'error', 5000);
+        } finally {
+          if (btnSubmit) {
+            btnSubmit.disabled = false;
+            btnSubmit.innerHTML = originalText;
+          }
+          formLogin.dataset.submitting = 'false';
         }
       });
     }
@@ -740,8 +800,9 @@ export const App = {
         roundBody.innerHTML = `
           <div class="round-status-box">
             <p class="round-status-text"><strong>20 jogadores selecionados</strong> para esta rodada. Pronto para realizar o sorteio equilibrado.</p>
-            <button type="button" class="btn btn-primary admin-only" id="btn-dash-sortear-pronto">
-              ${Utils.icon('shuffle', 18)} REALIZAR SORTEIO DOS TIMES
+            <button type="button" class="btn btn-primary btn-dash-sorteio admin-only" id="btn-dash-sortear-pronto">
+              <span class="btn-icon-wrap" aria-hidden="true">${Utils.icon('shuffle', 22)}</span>
+              <span class="btn-label">REALIZAR SORTEIO DOS TIMES</span>
             </button>
           </div>
         `;

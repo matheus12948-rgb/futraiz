@@ -62,10 +62,33 @@ img, svg {
   height: auto;
 }
 
+/* Preserva proporções e dimensões exatas de ícones do sistema */
+.star-icon,
+.app-icon,
+.i,
+.btn-icon svg,
+.btn-dash-sorteio svg,
+#btn-dash-sortear-pronto svg {
+  height: unset;
+}
+
 /* ==========================================================================
    2. MOBILE FIRST & TELAS ATÉ 767px
    ========================================================================== */
 @media (max-width: 767px) {
+  /* Prevenção de zoom automático no iOS Safari (iPhone): font-size >= 16px */
+  input,
+  select,
+  textarea,
+  .form-control,
+  .select-compact,
+  .player-stars-select,
+  .search-field input,
+  .input-hist-goals,
+  .input-hist-capas {
+    font-size: 16px !important;
+  }
+
   /* Header Mobile */
   .app-header {
     height: auto;
@@ -572,6 +595,126 @@ img, svg {
   }
 
   /* ==========================================================================
+     10-B. TELA DE JOGADORES & BOTÃO DE SORTEIO (MOBILE)
+     ========================================================================== */
+  .player-list-item {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 0.6rem;
+    padding: 0.75rem 0.85rem;
+    box-sizing: border-box;
+    min-height: 96px;
+  }
+
+  .player-item-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .player-item-name {
+    font-size: 0.95rem;
+    font-weight: 600;
+    line-height: 1.25;
+    flex: 1;
+    min-width: 0;
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    word-break: break-word;
+  }
+
+  .player-item-meta {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .player-list-item .player-stars,
+  .player-list-item .star-rating {
+    display: inline-flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 3px !important;
+    flex-shrink: 0 !important;
+    white-space: nowrap !important;
+  }
+
+  .player-list-item .player-stars .star-icon,
+  .player-list-item .star-rating .star-icon {
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 18px !important;
+    min-height: 18px !important;
+    max-width: 18px !important;
+    max-height: 18px !important;
+    display: inline-block;
+  }
+
+  .player-item-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.4rem;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .player-stars-select {
+    flex: 1;
+    max-width: 130px;
+    height: 34px;
+    font-size: 16px !important;
+  }
+
+  .player-item-actions .btn-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 1rem;
+    flex-shrink: 0;
+  }
+
+  /* Botão Realizar Sorteio no Mobile */
+  #btn-dash-sortear-pronto,
+  .btn-dash-sorteio {
+    width: 100%;
+    height: 44px;
+    min-height: 44px;
+    max-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-family: var(--font-heading, 'Barlow Condensed', sans-serif);
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    padding: 0 0.75rem;
+    white-space: nowrap;
+    box-sizing: border-box;
+    line-height: 1;
+  }
+
+  #btn-dash-sortear-pronto svg,
+  #btn-dash-sortear-pronto .app-icon,
+  .btn-dash-sorteio svg,
+  .btn-dash-sorteio .app-icon {
+    width: 22px !important;
+    height: 22px !important;
+    min-width: 22px !important;
+    min-height: 22px !important;
+    max-width: 22px !important;
+    max-height: 22px !important;
+    flex-shrink: 0;
+  }
+
+  /* ==========================================================================
      11. MODAIS (MOBILE)
      ========================================================================== */
   .modal,
@@ -685,6 +828,47 @@ img, svg {
   .landing-title {
     font-size: 2.15rem;
   }
+
+  .player-list-item {
+    padding: 0.65rem 0.7rem;
+    gap: 0.5rem;
+    min-height: 92px;
+  }
+
+  .player-item-name {
+    font-size: 0.9rem;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+  }
+
+  .player-list-item .player-stars .star-icon,
+  .player-list-item .star-rating .star-icon {
+    width: 16px !important;
+    height: 16px !important;
+    min-width: 16px !important;
+    min-height: 16px !important;
+    max-width: 16px !important;
+    max-height: 16px !important;
+  }
+
+  .player-stars-select {
+    font-size: 16px !important;
+    max-width: 115px;
+    height: 34px;
+  }
+
+  .player-item-actions .btn-icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  #btn-dash-sortear-pronto,
+  .btn-dash-sorteio {
+    font-size: 0.92rem;
+    padding: 0 0.5rem;
+    gap: 0.35rem;
+  }
 }
 
 /* ==========================================================================
@@ -692,6 +876,17 @@ img, svg {
    Aproveitamento de largura com 2 colunas, navegação adaptada e sem corte.
    ========================================================================== */
 @media (min-width: 768px) and (max-width: 1023px) {
+  /* Prevenção de zoom automático no iOS Safari (iPad): font-size >= 16px */
+  input,
+  select,
+  textarea,
+  .form-control,
+  .select-compact,
+  .player-stars-select,
+  .search-field input {
+    font-size: 16px !important;
+  }
+
   .app-header {
     height: var(--header-height);
     padding: 0;

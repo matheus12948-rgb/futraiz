@@ -58,10 +58,16 @@ export const Utils = {
   },
 
   // Renderiza estrelas com SVG esportivo minimalista (sem emojis)
+  // Garante layout com 5 posições consistentes e previsíveis (estrelas cheias + vazias)
   renderStars(count) {
     const stars = Math.min(5, Math.max(1, parseInt(count, 10) || 1));
-    const starSvg = `<svg class="star-icon" viewBox="0 0 24 24" width="13" height="13" fill="#eab308" stroke="#eab308" stroke-width="1.2" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
-    return `<span class="star-rating" title="${stars} estrelas">${starSvg.repeat(stars)}</span>`;
+    const starFilled = `<svg class="star-icon star-filled" viewBox="0 0 24 24" width="14" height="14" fill="#eab308" stroke="#eab308" stroke-width="1.2" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
+    const starEmpty = `<svg class="star-icon star-empty" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
+    let html = '';
+    for (let i = 1; i <= 5; i++) {
+      html += (i <= stars) ? starFilled : starEmpty;
+    }
+    return `<span class="player-stars star-rating" title="${stars} estrelas" aria-label="${stars} de 5 estrelas">${html}</span>`;
   },
 
   // Dicionário de ícones SVG minimalistas (estilo Lucide / Phosphor, traço 1.8px)
@@ -91,12 +97,14 @@ export const Utils = {
     flag: `<svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>`,
     more: `<svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/><circle cx="5" cy="12" r="1.5"/></svg>`,
     eye: `<svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>`,
+    edit: `<svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>`,
     logout: `<svg class="app-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`
   },
 
   icon(name, options = {}) {
+    const size = typeof options === 'number' ? options : (options && options.size ? options.size : 16);
     const raw = this.icons[name] || this.icons.ball;
-    return raw;
+    return raw.replace('<svg ', `<svg width="${size}" height="${size}" `);
   },
 
   // Calcula se o texto sobre uma cor deve ser escuro ou claro (contraste WCAG)
@@ -156,21 +164,27 @@ export const Utils = {
 
   // Modal genérico
   openModal(modalId) {
-    const modal = document.getElementById(modalId);
+    const modal = typeof modalId === 'string' ? document.getElementById(modalId) : modalId;
     if (modal) {
       modal.classList.add('active');
+      if (typeof modal.removeAttribute === 'function') {
+        modal.removeAttribute('aria-hidden');
+      }
       document.body.classList.add('modal-open');
     }
   },
 
   closeModal(modalId) {
-    const modal = document.getElementById(modalId);
+    const modal = typeof modalId === 'string' ? document.getElementById(modalId) : modalId;
     if (modal) {
       modal.classList.remove('active');
-      // se não houver outros modais abertos
-      if (!document.querySelector('.modal.active')) {
-        document.body.classList.remove('modal-open');
+      if (typeof modal.setAttribute === 'function') {
+        modal.setAttribute('aria-hidden', 'true');
       }
+    }
+    // se não houver outros modais abertos
+    if (!document.querySelector('.modal.active, .modal-overlay.active')) {
+      document.body.classList.remove('modal-open');
     }
   },
 

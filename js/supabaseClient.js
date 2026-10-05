@@ -245,6 +245,12 @@ class LocalSupabaseEngine {
         return this;
       },
 
+      upsert(rows, options = {}) {
+        this._operation = 'INSERT';
+        this._insertRows = Array.isArray(rows) ? rows : [rows];
+        return this;
+      },
+
       catch(reject) {
         return new Promise((res, rej) => this.then(res, rej)).catch(reject);
       },
@@ -280,8 +286,17 @@ class LocalSupabaseEngine {
               }
 
               if (tableName === 'futebois') {
+                if (row.admin_id && row.admin_id !== currentUser.id) {
+                  return resolve({ data: null, error: { message: `RLS Error: New row violates row-level security policy for table "futebois". Operation not permitted when auth.uid() != admin_id.` } });
+                }
                 if (row.historico_inicial_aberto === undefined) {
                   row.historico_inicial_aberto = true;
+                }
+              }
+
+              if (tableName === 'futebol_admins') {
+                if (row.user_id && row.user_id !== currentUser.id) {
+                  return resolve({ data: null, error: { message: `RLS Error: New row violates row-level security policy for table "futebol_admins". Operation not permitted when auth.uid() != user_id.` } });
                 }
               }
 

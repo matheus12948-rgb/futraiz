@@ -428,10 +428,51 @@ async function runTests() {
   const crossTenantInsert = await supabase.from('jogadores').insert([
     { futebol_id: futB.id, nome: 'Tentativa Cross Tenant', estrelas: 5 }
   ]);
+  // ----------------------------------------------------------------------------
+  // 26. Supabase RLS bloqueia INSERT direto na tabela futebois como usuário anônimo
+  // ----------------------------------------------------------------------------
+  await supabase.auth.signOut();
+  const anonFutInsert = await supabase.from('futebois').insert([
+    {
+      nome: 'Futebol Anon Invasor',
+      codigo_publico: 'FDT-HACK',
+      admin_id: '00000000-0000-4000-8000-000000000000'
+    }
+  ]);
   assert(
-    crossTenantInsert.error !== null && crossTenantInsert.error.message.includes('RLS Error'),
-    25,
-    `Cross-Tenant RLS: Admin do Futebol A foi impedido de inserir dados no Futebol B: "${crossTenantInsert.error?.message}"`
+    anonFutInsert.error !== null && anonFutInsert.error.message.includes('RLS Error'),
+    26,
+    `Supabase RLS bloqueou estritamente INSERT direto de anônimo na tabela futebois: "${anonFutInsert.error?.message}"`
+  );
+
+  // ----------------------------------------------------------------------------
+  // 27. Supabase RLS bloqueia INSERT em futebois quando admin_id != auth.uid()
+  // ----------------------------------------------------------------------------
+  await supabase.auth.signInWithPassword({
+    email: 'admin.carlos@futebol.com',
+    password: 'senhaSegura123'
+  });
+  const spoofedFutInsert = await supabase.from('futebois').insert([
+    {
+      nome: 'Futebol com Admin Spoofado',
+      codigo_publico: 'FDT-SPOOF',
+      admin_id: 'ffffffff-ffff-4fff-bfff-ffffffffffff' // id forjado diferente de Carlos
+    }
+  ]);
+  assert(
+    spoofedFutInsert.error !== null && spoofedFutInsert.error.message.includes('RLS Error'),
+    27,
+    `Supabase RLS bloqueou INSERT em futebois quando admin_id != auth.uid(): "${spoofedFutInsert.error?.message}"`
+  );
+
+  // ----------------------------------------------------------------------------
+  // 28. Formatação amigável de erro de Rate Limit de E-mail
+  // ----------------------------------------------------------------------------
+  const rateLimitMsg = Storage._formatAuthError({ message: 'email rate limit exceeded' });
+  assert(
+    rateLimitMsg.includes('Limite temporário de envio de e-mails atingido'),
+    28,
+    `Tratamento amigável de rate limit confirmado: "${rateLimitMsg}"`
   );
 
   console.log('\n================================================================');

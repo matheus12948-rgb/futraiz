@@ -12,6 +12,13 @@ export const Jogadores = {
   init() {
     this.bindEvents();
     this.render();
+
+    // Reatividade: re-renderiza quando jogadores forem alterados ou sincronizados do Supabase
+    Storage.onChange((type) => {
+      if (type === 'players') {
+        this.render();
+      }
+    });
   },
 
   bindEvents() {
@@ -45,11 +52,6 @@ export const Jogadores = {
     if (filterStars) {
       filterStars.addEventListener('change', () => this.render());
     }
-
-    const btnDemo = document.getElementById('btn-load-demo-players');
-    if (btnDemo) {
-      btnDemo.addEventListener('click', () => this.loadDemoPlayers());
-    }
   },
 
   setSelectedStars(rating) {
@@ -74,52 +76,50 @@ export const Jogadores = {
     return starInput ? Math.min(5, Math.max(1, parseInt(starInput.value, 10) || 3)) : 3;
   },
 
-  handleSave(e) {
+  async handleSave(e) {
     e.preventDefault();
     Storage.assertAdmin('Cadastrar ou editar jogador');
-    const nameInput = document.getElementById('player-name-input') || document.getElementById('player-name');
+    const nameInput = document.getElementById('player-name') || document.getElementById('player-name-input');
     const name = nameInput ? nameInput.value.trim() : '';
 
     if (!name) {
       Utils.toast('Por favor, informe o nome do jogador.', 'warning');
-      nameInput.focus();
+      if (nameInput) nameInput.focus();
       return;
     }
 
-    const stars = this.getSelectedStars();
-    const players = Storage.getPlayers();
-
-    if (this.editingId) {
-      // Edição
-      const index = players.findIndex(p => p.id === this.editingId);
-      if (index !== -1) {
-        players[index].name = name;
-        players[index].stars = stars;
-        Storage.savePlayers(players);
-        if (Storage.updatePlayer) {
-          Storage.updatePlayer({ id: this.editingId, name, stars }).catch(() => {});
-        }
-        Utils.toast(`Jogador "${name}" atualizado com sucesso!`, 'success');
-      }
-      this.cancelEdit();
-    } else {
-      // Adição
-      const newPlayer = {
-        id: Utils.generateId('ply'),
-        name: name,
-        stars: stars,
-        gols_historicos_iniciais: 0,
-        capas_historicas_iniciais: 0,
-        createdAt: new Date().toISOString()
-      };
-      players.push(newPlayer);
-      Storage.savePlayers(players);
-      Utils.toast(`Jogador "${name}" adicionado com sucesso!`, 'success');
-      if (nameInput) nameInput.value = '';
-      this.setSelectedStars(3);
+    const submitBtn = document.getElementById('player-submit-btn');
+    const originalText = submitBtn ? submitBtn.innerHTML : 'Cadastrar';
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span>Salvando...</span>';
     }
 
-    this.render();
+    try {
+      const stars = this.getSelectedStars();
+
+      if (this.editingId) {
+        // Edição
+        await Storage.updatePlayer({ id: this.editingId, name, stars });
+        Utils.toast(`Jogador "${name}" atualizado com sucesso!`, 'success');
+        this.cancelEdit();
+      } else {
+        // Adição
+        await Storage.addPlayer({ name, stars });
+        Utils.toast(`Jogador "${name}" adicionado com sucesso!`, 'success');
+        if (nameInput) nameInput.value = '';
+        this.setSelectedStars(3);
+      }
+
+      this.render();
+    } catch (err) {
+      Utils.toast(`Erro ao salvar jogador: ${err.message}`, 'error', 4500);
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+      }
+    }
   },
 
   startEdit(id) {
@@ -128,7 +128,7 @@ export const Jogadores = {
     if (!player) return;
 
     this.editingId = id;
-    const nameInput = document.getElementById('player-name-input');
+    const nameInput = document.getElementById('player-name') || document.getElementById('player-name-input');
     const titleEl = document.getElementById('player-form-title');
     const submitBtn = document.getElementById('player-submit-btn');
     const cancelBtn = document.getElementById('player-cancel-edit');
@@ -150,7 +150,7 @@ export const Jogadores = {
 
   cancelEdit() {
     this.editingId = null;
-    const nameInput = document.getElementById('player-name-input');
+    const nameInput = document.getElementById('player-name') || document.getElementById('player-name-input');
     const titleEl = document.getElementById('player-form-title');
     const submitBtn = document.getElementById('player-submit-btn');
     const cancelBtn = document.getElementById('player-cancel-edit');
@@ -159,22 +159,29 @@ export const Jogadores = {
     this.setSelectedStars(3);
 
     if (titleEl) titleEl.textContent = 'Novo Jogador';
-    if (submitBtn) submitBtn.innerHTML = '<span>+ Cadastrar Jogador</span>';
+    if (submitBtn) submitBtn.innerHTML = '<span>Cadastrar</span>';
     if (cancelBtn) cancelBtn.style.display = 'none';
   },
 
-  deletePlayer(id) {
+  async deletePlayer(id) {
     Storage.assertAdmin('Excluir jogador');
     const players = Storage.getPlayers();
     const player = players.find(p => p.id === id);
     if (!player) return;
 
-    if (confirm(`Deseja realmente remover o jogador "${player.name}"?`)) {
-      const updated = players.filter(p => p.id !== id);
-      Storage.savePlayers(updated);
+    if (typeof window !== 'undefined' && typeof window.confirm === 'function') {
+      if (!window.confirm(`Deseja realmente remover o jogador "${player.name}"?`)) {
+        return;
+      }
+    }
+
+    try {
+      await Storage.deletePlayer(id);
       Utils.toast(`Jogador "${player.name}" removido.`, 'info');
       if (this.editingId === id) this.cancelEdit();
       this.render();
+    } catch (err) {
+      Utils.toast(`Erro ao remover jogador: ${err.message}`, 'error');
     }
   },
 
@@ -298,7 +305,7 @@ export const Jogadores = {
     filtered.sort((a, b) => b.stars - a.stars || a.name.localeCompare(b.name));
 
     // Atualiza contadores
-    if (countEl) countEl.textContent = allPlayers.length;
+    if (countEl) countEl.textContent = String(allPlayers.length);
     if (badgeStatusEl) {
       if (allPlayers.length >= 20) {
         badgeStatusEl.className = 'status-badge status-success';
@@ -314,7 +321,7 @@ export const Jogadores = {
         <div class="empty-state text-center" style="padding: 2.5rem 1rem;">
           <div class="empty-icon" style="color: var(--text-dim); margin-bottom: 0.75rem;">${Utils.icon('users', 32)}</div>
           <h4>Nenhum jogador encontrado</h4>
-          <p class="text-muted">${allPlayers.length === 0 ? 'Cadastre jogadores ou gere 20 exemplos para começar.' : 'Nenhum jogador corresponde ao filtro atual.'}</p>
+          <p class="text-muted">${allPlayers.length === 0 ? 'Cadastre os jogadores da pelada para começar.' : 'Nenhum jogador corresponde ao filtro atual.'}</p>
         </div>
       `;
       return;
@@ -338,10 +345,10 @@ export const Jogadores = {
               <option value="4" ${player.stars === 4 ? 'selected' : ''}>4 estrelas</option>
               <option value="5" ${player.stars === 5 ? 'selected' : ''}>5 estrelas</option>
             </select>
-            <button type="button" class="btn-icon btn-sm" title="Diminuir estrela" data-action="dec-star" data-id="${player.id}" ${player.stars <= 1 ? 'disabled' : ''}>-</button>
-            <button type="button" class="btn-icon btn-sm" title="Aumentar estrela" data-action="inc-star" data-id="${player.id}" ${player.stars >= 5 ? 'disabled' : ''}>+</button>
-            <button type="button" class="btn-icon btn-sm btn-edit" title="Editar" data-action="edit" data-id="${player.id}">${Utils.icon('edit', 14)}</button>
-            <button type="button" class="btn-icon btn-sm btn-delete text-danger" title="Excluir" data-action="delete" data-id="${player.id}">${Utils.icon('trash', 14)}</button>
+            <button type="button" class="btn-icon btn-sm" title="Diminuir estrela" aria-label="Diminuir estrela de ${player.name}" data-action="dec-star" data-id="${player.id}" ${player.stars <= 1 ? 'disabled' : ''}>-</button>
+            <button type="button" class="btn-icon btn-sm" title="Aumentar estrela" aria-label="Aumentar estrela de ${player.name}" data-action="inc-star" data-id="${player.id}" ${player.stars >= 5 ? 'disabled' : ''}>+</button>
+            <button type="button" class="btn-icon btn-sm btn-edit" title="Editar jogador" aria-label="Editar ${player.name}" data-action="edit" data-id="${player.id}">${Utils.icon('edit', 14)}</button>
+            <button type="button" class="btn-icon btn-sm btn-delete text-danger" title="Excluir jogador" aria-label="Excluir ${player.name}" data-action="delete" data-id="${player.id}">${Utils.icon('trash', 14)}</button>
           </div>
         `}
       </div>

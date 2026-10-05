@@ -91,6 +91,25 @@ export const Storage = {
     return this.userRole === 'ADMIN';
   },
 
+  _formatAuthError(error) {
+    if (!error) return 'Erro desconhecido de autenticação.';
+    const msg = error.message || String(error);
+    const lower = msg.toLowerCase();
+    if (lower.includes('rate limit') || lower.includes('over_email_send_rate_limit')) {
+      return 'Limite temporário de envio de e-mails atingido. Aguarde alguns minutos e tente novamente.';
+    }
+    if (lower.includes('invalid login credentials')) {
+      return 'E-mail ou senha incorretos.';
+    }
+    if (lower.includes('email not confirmed')) {
+      return 'Confirmação de e-mail pendente. Verifique sua caixa de entrada e clique no link para ativar sua conta.';
+    }
+    if (lower.includes('user already registered') || lower.includes('already registered') || lower.includes('já cadastrado')) {
+      return 'Este e-mail já está cadastrado. Faça login ou utilize outra conta.';
+    }
+    return msg;
+  },
+
   // Gera código público exclusivo no padrão FDT-XXXX
   generatePublicCode() {
     const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -99,6 +118,24 @@ export const Storage = {
       code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return `FDT-${code}`;
+  },
+
+  // Normaliza o código público informado pelo usuário
+  // Suporta: "fdt-7k29", " FDT-7K29 ", "7k29", "FDT 7K29", "FDT-7K29", etc.
+  normalizePublicCode(rawCode) {
+    if (!rawCode || typeof rawCode !== 'string') return '';
+    let code = rawCode.trim().toUpperCase();
+    // Substitui múltiplos espaços ou hífens com espaços (ex: "FDT - 7K29", "FDT 7K29" -> "FDT-7K29")
+    code = code.replace(/\s*-\s*/g, '-').replace(/\s+/g, '-');
+    // Se digitou apenas o sufixo alfanumérico de 4 caracteres (ex: "7K29"), inclui o prefixo "FDT-"
+    if (/^[A-Z0-9]{4}$/.test(code)) {
+      code = `FDT-${code}`;
+    }
+    // Se digitou sem hífen (ex: "FDT7K29"), insere o hífen
+    if (/^FDT[A-Z0-9]{4}$/.test(code)) {
+      code = `FDT-${code.slice(3)}`;
+    }
+    return code;
   },
 
   // ============================================================================
@@ -110,32 +147,149 @@ export const Storage = {
    */
   async createFutebol({ nome, adminNome, email, password }) {
     try {
-      // 1. Cria usuário no Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: email.trim(),
-        password: password,
+      const cleanEmail = (email || '').trim().toLowerCase();
+      const cleanPassword = password || '';
+      const cleanNome = (nome || '').trim();
+      const cleanAdminNome = (adminNome || '').trim();
+
+      if (!cleanEmail || !cleanPassword) {
+        return { success: false, error: 'E-mail e senha são obrigatórios.' };
+      }
+      if (!cleanNome) {
+        return { success: false, error: 'Nome do futebol é obrigatório.' };
+      }
+      if (cleanPassword.length < 6) {
+        return { success: false, error: 'A senha deve conter no mínimo 6 caracteres.' };
+      }
+
+      // 1. Cria usuário no Supabase Auth (uma única tentativa controlada)
+      let authUser = null;
+      let authSession = null;
+
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email: cleanEmail,
+        password: cleanPassword,
         options: {
-          data: { name: adminNome.trim() }
+          data: { name: cleanAdminNome }
         }
       });
 
-      if (authError) {
-        throw new Error(authError.message);
+      if (signUpError) {
+        const errorMsg = (signUpError.message || '').toLowerCase();
+        // Tratamento amigável para rate limit de e-mails do Supabase Auth
+        if (errorMsg.includes('rate limit') || errorMsg.includes('over_email_send_rate_limit')) {
+          return {
+            success: false,
+            error: 'Limite temporário de envio de e-mails atingido. Aguarde alguns minutos e tente novamente.'
+          };
+        }
+
+        // Se o usuário já existir no Supabase Auth (ex: tentativa anterior antes do futebol ser criado),
+        // tenta autenticar diretamente com as credenciais informadas para obter a sessão
+        if (errorMsg.includes('already registered') || errorMsg.includes('user already exists') || errorMsg.includes('já cadastrado')) {
+          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+            email: cleanEmail,
+            password: cleanPassword
+          });
+
+          if (signInError) {
+            return {
+              success: false,
+              error: this._formatAuthError(signInError)
+            };
+          }
+
+          authUser = signInData?.user;
+          authSession = signInData?.session;
+        } else {
+          return {
+            success: false,
+            error: this._formatAuthError(signUpError)
+          };
+        }
+      } else {
+        authUser = signUpData?.user;
+        authSession = signUpData?.session;
       }
 
-      const user = authData.user;
-      if (!user) throw new Error('Não foi possível obter o identificador do administrador.');
+      // 2. VERIFICAÇÃO RIGOROSA DO ESTADO DA SESSÃO
+      // Não presuma que signUp() sempre cria uma sessão ativa.
+      if (!authSession) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        authSession = sessionData?.session;
+      }
 
-      // 2. Gera código público exclusivo (ex: FDT-7K29)
+      // Se ainda não temos sessão ativa no client, tenta signInWithPassword
+      if (!authSession) {
+        const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password: cleanPassword
+        });
+
+        if (!signInErr && signInData?.session) {
+          authSession = signInData.session;
+          authUser = signInData.user || authUser;
+        }
+      }
+
+      // Se ainda assim não houver sessão ativa autenticada:
+      // O Supabase exige confirmação de e-mail antes de autenticar.
+      // NÃO tentamos fazer INSERT como anon!
+      if (!authSession) {
+        return {
+          success: false,
+          needsEmailConfirmation: true,
+          error: 'Conta criada! Confirmação de e-mail necessária. Verifique sua caixa de entrada para ativar sua conta antes de criar o futebol.'
+        };
+      }
+
+      // 3. Obtém o usuário e auth.uid() autenticado
+      const { data: userData } = await supabase.auth.getUser();
+      const currentAuthUser = userData?.user || authSession.user || authUser;
+      const authUid = currentAuthUser?.id;
+
+      if (!authUid) {
+        return {
+          success: false,
+          error: 'Sessão autenticada inválida: identificador de usuário não encontrado.'
+        };
+      }
+
+      // 4. Se o usuário já possui um futebol associado, recupera a sessão do futebol existente
+      const { data: existingAdminLinks } = await supabase
+        .from('futebol_admins')
+        .select('*')
+        .eq('user_id', authUid);
+
+      if (existingAdminLinks && existingAdminLinks.length > 0) {
+        const existingFutId = existingAdminLinks[0].futebol_id;
+        const { data: existingFut } = await supabase
+          .from('futebois')
+          .select('*')
+          .eq('id', existingFutId)
+          .single();
+
+        if (existingFut) {
+          this.currentFutebol = existingFut;
+          this.userRole = 'ADMIN';
+          store.setItem(STORAGE_KEYS.CURRENT_FUTEBOL, JSON.stringify(existingFut));
+          store.setItem(STORAGE_KEYS.USER_ROLE, 'ADMIN');
+          this.setupRealtime(existingFut.id);
+          this._emitChange('futebolCreated', existingFut);
+          return { success: true, futebol: existingFut, alreadyExisted: true };
+        }
+      }
+
+      // 5. Gera código público exclusivo (ex: FDT-7K29)
       const codigoPublico = this.generatePublicCode();
 
-      // 3. Registra o futebol no Supabase (padrão 7 minutos = 420 segundos)
-      // O banco Supabase possui futebois.id como UUID com DEFAULT gen_random_uuid().
-      // Não enviamos ID com prefixo "fut_...". O PostgreSQL/Supabase gera o UUID automaticamente.
+      // 6. Registra o futebol no Supabase como USUÁRIO AUTENTICADO
+      // O PostgreSQL/Supabase gera o id UUID automaticamente através do DEFAULT gen_random_uuid().
+      // admin_id = authUid (satisfaz a política RLS: auth.uid() = admin_id)
       const insertPayload = {
         codigo_publico: codigoPublico,
-        nome: nome.trim(),
-        admin_id: user.id,
+        nome: cleanNome,
+        admin_id: authUid,
         default_match_duration_seconds: 420,
         historico_inicial_aberto: true,
         created_at: new Date().toISOString()
@@ -168,10 +322,11 @@ export const Storage = {
         futebolRecord.default_match_duration_seconds = 420;
       }
 
-      // 4. Vincula na tabela de administradores do futebol usando o UUID retornado
+      // 7. Vincula na tabela de administradores do futebol usando o UUID retornado
+      // user_id = authUid (satisfaz a política RLS: auth.uid() = user_id)
       const adminLink = {
         futebol_id: futebolRecord.id,
-        user_id: user.id,
+        user_id: authUid,
         role: 'admin',
         created_at: new Date().toISOString()
       };
@@ -179,7 +334,7 @@ export const Storage = {
       const { error: adminLinkError } = await supabase.from('futebol_admins').insert([adminLink]);
       if (adminLinkError) throw new Error(adminLinkError.message);
 
-      // 5. Define sessão ativa como Administrador
+      // 8. Define sessão ativa como Administrador
       this.currentFutebol = futebolRecord;
       this.userRole = 'ADMIN';
       store.setItem(STORAGE_KEYS.CURRENT_FUTEBOL, JSON.stringify(futebolRecord));
@@ -245,7 +400,7 @@ export const Storage = {
         password
       });
 
-      if (authError) throw new Error(authError.message);
+      if (authError) throw new Error(this._formatAuthError(authError));
 
       const user = authData.user;
       // Busca futebóis onde o usuário é administrador
@@ -300,7 +455,11 @@ export const Storage = {
    */
   async loadPublicFutebol(codigoPublico) {
     try {
-      const cleanCode = (codigoPublico || '').toUpperCase().trim();
+      const cleanCode = this.normalizePublicCode(codigoPublico);
+      if (!cleanCode) {
+        return { success: false, error: 'Futebol não encontrado. Verifique o código e tente novamente.' };
+      }
+
       const { data: futebol, error } = await supabase
         .from('futebois')
         .select('*')
@@ -308,11 +467,13 @@ export const Storage = {
         .single();
 
       if (error || !futebol) {
-        return { success: false, error: 'Futebol não encontrado.' };
+        return { success: false, error: 'Futebol não encontrado. Verifique o código e tente novamente.' };
       }
 
       // Desconecta auth de admin caso estivesse em outro
-      await supabase.auth.signOut();
+      try {
+        await supabase.auth.signOut();
+      } catch {}
 
       this.currentFutebol = futebol;
       this.userRole = 'PUBLIC_VIEWER';
@@ -525,6 +686,14 @@ export const Storage = {
   setupRealtime(futebolId) {
     if (!futebolId) return;
     try {
+      if (this.realtimeSubscription) {
+        try {
+          if (supabase && typeof supabase.removeChannel === 'function') {
+            supabase.removeChannel(this.realtimeSubscription);
+          }
+        } catch {}
+        this.realtimeSubscription = null;
+      }
       const channel = supabase.channel(`futebol_${futebolId}`);
       channel.on('postgres_changes', { event: '*', schema: 'public', table: 'partida_ao_vivo' }, (payload) => {
         if (payload.new && payload.new.futebol_id === futebolId) {
@@ -630,7 +799,7 @@ export const Storage = {
       if (this.currentFutebol) {
         const futId = this.currentFutebol.id;
         const rows = normalized.map(p => ({
-          id: p.id,
+          id: p.id || Utils.generateUUID(),
           futebol_id: futId,
           nome: p.name,
           estrelas: p.stars,
@@ -639,8 +808,8 @@ export const Storage = {
           created_at: p.createdAt || new Date().toISOString()
         }));
 
-        supabase.from('jogadores').insert(rows).catch(err => {
-          console.warn('[Storage.savePlayers] Erro supabase insert jogadores:', err);
+        Promise.resolve(supabase.from('jogadores').upsert(rows, { onConflict: 'id' })).catch(err => {
+          console.warn('[Storage.savePlayers] Erro supabase upsert jogadores:', err);
         });
       }
 
@@ -756,6 +925,76 @@ export const Storage = {
     }
 
     return players[idx];
+  },
+
+  async addPlayer({ name, stars }) {
+    this.assertAdmin('Cadastrar jogador');
+    const cleanName = (name || '').trim();
+    if (!cleanName) throw new Error('Nome do jogador é obrigatório.');
+    const cleanStars = Math.min(5, Math.max(1, parseInt(stars, 10) || 3));
+    const newId = Utils.generateUUID();
+
+    const newPlayer = {
+      id: newId,
+      name: cleanName,
+      stars: cleanStars,
+      gols_historicos_iniciais: 0,
+      capas_historicas_iniciais: 0,
+      createdAt: new Date().toISOString()
+    };
+
+    if (this.currentFutebol) {
+      const futId = this.currentFutebol.id;
+      const dbRow = {
+        id: newId,
+        futebol_id: futId,
+        nome: cleanName,
+        estrelas: cleanStars,
+        gols_historicos_iniciais: 0,
+        capas_historicas_iniciais: 0,
+        created_at: newPlayer.createdAt
+      };
+
+      const { error } = await supabase.from('jogadores').insert([dbRow]);
+      if (error) {
+        console.error('[Storage.addPlayer] Erro Supabase ao cadastrar jogador:', error);
+        throw new Error(error.message || 'Erro ao cadastrar jogador no Supabase.');
+      }
+    }
+
+    const players = this.getPlayers();
+    players.push(newPlayer);
+    const key = this._getScopedKey('players');
+    store.setItem(key, JSON.stringify(players));
+    this._emitChange('players', players);
+    return newPlayer;
+  },
+
+  async deletePlayer(playerId) {
+    this.assertAdmin('Excluir jogador');
+    const players = this.getPlayers();
+    const player = players.find(p => p.id === playerId);
+    if (!player) return false;
+
+    if (this.currentFutebol) {
+      const futId = this.currentFutebol.id;
+      const { error } = await supabase.from('jogadores').delete().eq('id', playerId).eq('futebol_id', futId);
+      if (error) {
+        console.error('[Storage.deletePlayer] Erro Supabase ao excluir jogador:', error);
+        throw new Error(error.message || 'Erro ao excluir jogador no Supabase.');
+      }
+    }
+
+    const updated = players.filter(p => p.id !== playerId);
+    const key = this._getScopedKey('players');
+    store.setItem(key, JSON.stringify(updated));
+
+    // Remove também da seleção de jogadores da rodada se estiver
+    const selectedIds = this.getSelectedPlayerIds().filter(id => id !== playerId);
+    this.saveSelectedPlayerIds(selectedIds);
+
+    this._emitChange('players', updated);
+    return true;
   },
 
   // ============================================================================
@@ -1043,10 +1282,10 @@ export const Storage = {
           };
           supabase.from('rodadas').update(dbRound).eq('id', round.id).then(res => {
             if (!res.data || (Array.isArray(res.data) && res.data.length === 0)) {
-              supabase.from('rodadas').insert([dbRound]).catch(() => {});
+              Promise.resolve(supabase.from('rodadas').insert([dbRound])).catch(() => {});
             }
           }).catch(() => {
-            supabase.from('rodadas').insert([dbRound]).catch(() => {});
+            Promise.resolve(supabase.from('rodadas').insert([dbRound])).catch(() => {});
           });
         }
       }
@@ -1358,11 +1597,11 @@ export const Storage = {
         }));
 
         supabase.from('rodada_classificacao').delete().eq('rodada_id', roundId).then(() => {
-          supabase.from('rodada_classificacao').insert(rows).catch(err => {
+          Promise.resolve(supabase.from('rodada_classificacao').insert(rows)).catch(err => {
             console.warn('[Storage] Sync rodada_classificacao error:', err);
           });
         }).catch(() => {
-          supabase.from('rodada_classificacao').insert(rows).catch(() => {});
+          Promise.resolve(supabase.from('rodada_classificacao').insert(rows)).catch(() => {});
         });
       }
 
@@ -1552,7 +1791,7 @@ export const Storage = {
           time_id: c.time_id,
           created_at: c.createdAt || new Date().toISOString()
         }));
-        supabase.from('capas').insert(rows).catch(err => console.warn('Sync capas:', err));
+        Promise.resolve(supabase.from('capas').insert(rows)).catch(err => console.warn('Sync capas:', err));
       }
     }
 
@@ -1623,7 +1862,7 @@ export const Storage = {
             minuto: g.minute || 0,
             created_at: g.createdAt || new Date().toISOString()
           }));
-          supabase.from('gols').insert(dbGoals).catch(err => console.warn('Sync gols:', err));
+          Promise.resolve(supabase.from('gols').insert(dbGoals)).catch(err => console.warn('Sync gols:', err));
         }
       }).catch(err => console.warn('Sync partida:', err));
     }
@@ -1736,7 +1975,7 @@ export const Storage = {
             .then(res => {
               if (!res.data || res.data.length === 0) {
                 // Se não existia ainda, insere
-                supabase.from('partida_ao_vivo').insert([row]).catch(() => {});
+                Promise.resolve(supabase.from('partida_ao_vivo').insert([row])).catch(() => {});
               }
             })
             .catch(err => console.warn('Sync live match:', err));
