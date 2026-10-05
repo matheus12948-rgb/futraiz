@@ -178,6 +178,12 @@ class LocalSupabaseEngine {
   _broadcast(table, eventType, record) {
     this.subscribers.forEach((callbacks, key) => {
       if (key.includes(table) || key.endsWith('_all')) {
+        // Se a tabela possui futebol_id e o canal é futebol_${futebolId}, isola por futebol
+        if (record && record.futebol_id && key.startsWith('futebol_')) {
+          if (!key.startsWith(`futebol_${record.futebol_id}_`)) {
+            return; // Canal de outro futebol: não entrega
+          }
+        }
         callbacks.forEach(cb => {
           try {
             cb({ eventType, new: record, old: record });
@@ -206,7 +212,7 @@ class LocalSupabaseEngine {
       _insertRows: null,
 
       select(columns = '*') {
-        if (this._operation !== 'INSERT' && this._operation !== 'UPDATE' && this._operation !== 'DELETE') {
+        if (this._operation !== 'INSERT' && this._operation !== 'UPDATE' && this._operation !== 'DELETE' && this._operation !== 'UPSERT') {
           this._operation = 'SELECT';
         }
         this._selectColumns = columns;
@@ -215,6 +221,11 @@ class LocalSupabaseEngine {
 
       eq(column, value) {
         this._filters.push({ column, value });
+        return this;
+      },
+
+      limit(n) {
+        this._limit = n;
         return this;
       },
 
@@ -246,8 +257,9 @@ class LocalSupabaseEngine {
       },
 
       upsert(rows, options = {}) {
-        this._operation = 'INSERT';
+        this._operation = 'UPSERT';
         this._insertRows = Array.isArray(rows) ? rows : [rows];
+        this._upsertOptions = options;
         return this;
       },
 
@@ -257,10 +269,10 @@ class LocalSupabaseEngine {
 
       async then(resolve, reject) {
         try {
-          // --- OPERAÇÃO 1: INSERT ---
-          if (this._operation === 'INSERT') {
+          // --- OPERAÇÃO 1: INSERT OU UPSERT ---
+          if (this._operation === 'INSERT' || this._operation === 'UPSERT') {
             const rowsArr = this._insertRows || [];
-            // RLS: Anônimo não pode fazer INSERT
+            // RLS: Anônimo não pode fazer INSERT ou UPSERT
             if (!currentUser) {
               return resolve({ data: null, error: { message: `RLS Error: New row violates row-level security policy for table "${tableName}". Operation not permitted for anonymous public users.` } });
             }
@@ -279,6 +291,8 @@ class LocalSupabaseEngine {
               if (tableName !== 'futebois' && tableName !== 'futebol_admins') {
                 const isFutebolAdmin = (self.tables.futebol_admins || []).some(
                   a => a.futebol_id === row.futebol_id && a.user_id === currentUser.id
+                ) || (self.tables.futebois || []).some(
+                  f => f.id === row.futebol_id && f.admin_id === currentUser.id
                 );
                 if (!isFutebolAdmin) {
                   return resolve({ data: null, error: { message: `RLS Error: Permission denied. User is not an authorized administrator for futebol "${row.futebol_id}".` } });
@@ -360,6 +374,8 @@ class LocalSupabaseEngine {
                   const futId = row.futebol_id || (this._updateValues && this._updateValues.futebol_id);
                   const isFutebolAdmin = (self.tables.futebol_admins || []).some(
                     a => a.futebol_id === futId && a.user_id === currentUser.id
+                  ) || (self.tables.futebois || []).some(
+                    f => f.id === futId && f.admin_id === currentUser.id
                   );
                   if (!isFutebolAdmin) {
                     return resolve({ data: null, error: { message: `RLS Error: Permission denied. Cannot update data of another futebol.` } });
@@ -409,6 +425,8 @@ class LocalSupabaseEngine {
                 if (tableName !== 'futebois') {
                   const isFutebolAdmin = (self.tables.futebol_admins || []).some(
                     a => a.futebol_id === row.futebol_id && a.user_id === currentUser.id
+                  ) || (self.tables.futebois || []).some(
+                    f => f.id === row.futebol_id && f.admin_id === currentUser.id
                   );
                   if (!isFutebolAdmin) {
                     return resolve({ data: null, error: { message: `RLS Error: Permission denied. Cannot delete data of another futebol.` } });
@@ -444,6 +462,10 @@ class LocalSupabaseEngine {
             });
           }
 
+          if (this._limit && !this._single) {
+            rows = rows.slice(0, this._limit);
+          }
+
           if (this._single) {
             return resolve({ data: rows[0] || null, error: null });
           } else {
@@ -474,6 +496,13 @@ export function initSupabaseClient() {
   // Motor com emulação estrita de RLS e multi-tenancy
   supabase = new LocalSupabaseEngine();
   console.log('🛡️ [Supabase] Motor Supabase Local ativo com validação de RLS e multi-tenancy.');
+  return supabase;
+}
+
+export function getSupabase() {
+  if (!supabase || (supabase instanceof LocalSupabaseEngine && SupabaseConfig.isConfigured() && typeof window !== 'undefined' && window.supabase && window.supabase.createClient)) {
+    return initSupabaseClient();
+  }
   return supabase;
 }
 

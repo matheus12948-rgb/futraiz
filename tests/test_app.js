@@ -221,7 +221,7 @@ Sorteio.saveSelection();
 
 assert(Sorteio.selectedPlayerIds.size === 20, '20 jogadores selecionados para a nova rodada');
 // Verifica se o primeiro jogador da rodada 1 (Neymar) agora ficou de fora
-assert(!Sorteio.selectedPlayerIds.has('p_1'), 'Jogador p_1 (Neymar) ficou de fora da Rodada 2 conforme planejado');
+assert(!Sorteio.selectedPlayerIds.has(test30Players[0].id), 'Jogador 1 (Neymar) ficou de fora da Rodada 2 conforme planejado');
 
 const selectedPlayersR2 = saved30.filter(p => Sorteio.selectedPlayerIds.has(p.id));
 Sorteio.executarSorteio(selectedPlayersR2);
@@ -234,7 +234,7 @@ console.log('\n--- TESTE 13: Integridade da Rodada Anterior ---');
 const historicalRounds = Storage.getRounds();
 const previousRoundRecord = historicalRounds.find(r => r.id === currentRound1.id);
 assert(previousRoundRecord !== undefined, 'Rodada 1 localizada no histórico permanente de rodadas');
-assert(previousRoundRecord.selectedPlayerIds.includes('p_1'), 'Rodada 1 continua tendo o jogador p_1 associado');
+assert(previousRoundRecord.selectedPlayerIds.includes(test30Players[0].id), 'Rodada 1 continua tendo o jogador 1 associado');
 
 // 14. Confirmar que o histórico continua intacto
 console.log('\n--- TESTE 14: Integridade do Histórico de Partidas ---');

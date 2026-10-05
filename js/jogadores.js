@@ -13,9 +13,13 @@ export const Jogadores = {
     this.bindEvents();
     this.render();
 
+    if (Storage.currentFutebol) {
+      Storage.syncPlayersFromSupabase(Storage.currentFutebol.id).catch(() => {});
+    }
+
     // Reatividade: re-renderiza quando jogadores forem alterados ou sincronizados do Supabase
     Storage.onChange((type) => {
-      if (type === 'players') {
+      if (type === 'players' || type === 'authChanged' || type === 'publicFutebolLoaded') {
         this.render();
       }
     });

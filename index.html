@@ -26,6 +26,10 @@
   <link rel="stylesheet" href="./css/responsive.css">
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    window.__SUPABASE_URL__ = 'https://bufbpmznfzikbrlmwxxt.supabase.co';
+    window.__SUPABASE_ANON_KEY__ = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1ZmJwbXpuZnppa2JybG13eHh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExNTQ3MDksImV4cCI6MjEwNjczMDcwOX0.47poDxvaUuyRIWMnzUWYozsT2admN1M9AEuJGtVZv38';
+  </script>
 </head>
 
 <body>
@@ -978,58 +982,57 @@
   <div class="modal modal-sheet-wrap" id="modal-more-menu" role="dialog" aria-modal="true"
     aria-labelledby="more-menu-title">
     <div class="modal-backdrop"></div>
-    <div class="modal-card modal-sheet">
-      <div class="modal-header">
-        <h3 id="more-menu-title">Mais</h3>
-        <button type="button" class="btn-close" data-close aria-label="Fechar"><svg class="i" aria-hidden="true">
-            <use href="#i-x" />
-          </svg></button>
+    <div class="modal-card modal-sheet more-menu-card">
+      <div class="modal-header more-menu-header">
+        <h3 id="more-menu-title" class="more-menu-title">MAIS</h3>
+        <button type="button" class="btn-close" data-close aria-label="Fechar">
+          <svg class="i" aria-hidden="true"><use href="#i-x" /></svg>
+        </button>
       </div>
-      <div class="menu-list">
-        <button type="button" class="menu-item" data-screen="rankings" data-close>
-          <svg class="i" aria-hidden="true">
-            <use href="#i-trophy" />
-          </svg>
-          <span>Rankings</span>
-          <svg class="i i-sm menu-chevron" aria-hidden="true">
-            <use href="#i-chevron-right" />
-          </svg>
-        </button>
-        <button type="button" class="menu-item" data-screen="historico" data-close>
-          <svg class="i" aria-hidden="true">
-            <use href="#i-history" />
-          </svg>
-          <span>Histórico</span>
-          <svg class="i i-sm menu-chevron" aria-hidden="true">
-            <use href="#i-chevron-right" />
-          </svg>
-        </button>
-        <span class="menu-section">Configurações</span>
-        <button type="button" class="menu-item admin-only" data-screen="configuracoes" data-close>
-          <svg class="i" aria-hidden="true">
-            <use href="#i-settings" />
-          </svg>
-          <span>Configurações</span>
-          <svg class="i i-sm menu-chevron" aria-hidden="true">
-            <use href="#i-chevron-right" />
-          </svg>
-        </button>
-        <button type="button" class="menu-item" id="btn-more-share" data-close>
-          <svg class="i" aria-hidden="true">
-            <use href="#i-share" />
-          </svg>
-          <span>Copiar link público</span>
-        </button>
-        <button type="button" class="menu-item menu-item-danger admin-only" id="btn-more-reset" data-close>
-          <svg class="i" aria-hidden="true">
-            <use href="#i-trash" />
-          </svg>
+
+      <div class="more-menu-body">
+        <!-- Grupo Principal: Rankings, Histórico, Configurações -->
+        <div class="more-menu-group" id="more-menu-nav-group">
+          <button type="button" class="more-menu-item menu-item" data-screen="rankings" data-close>
+            <span class="more-menu-icon" aria-hidden="true">
+              <svg class="i" aria-hidden="true"><use href="#i-trophy" /></svg>
+            </span>
+            <span class="more-menu-label">Rankings</span>
+            <svg class="i menu-chevron" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+          </button>
+          <button type="button" class="more-menu-item menu-item" data-screen="historico" data-close>
+            <span class="more-menu-icon" aria-hidden="true">
+              <svg class="i" aria-hidden="true"><use href="#i-history" /></svg>
+            </span>
+            <span class="more-menu-label">Histórico</span>
+            <svg class="i menu-chevron" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+          </button>
+          <button type="button" class="more-menu-item menu-item admin-only" data-screen="configuracoes" data-close>
+            <span class="more-menu-icon" aria-hidden="true">
+              <svg class="i" aria-hidden="true"><use href="#i-settings" /></svg>
+            </span>
+            <span class="more-menu-label">Configurações</span>
+            <svg class="i menu-chevron" aria-hidden="true"><use href="#i-chevron-right" /></svg>
+          </button>
+        </div>
+
+        <!-- Grupo Separado: Copiar link público -->
+        <div class="more-menu-group more-menu-group-action">
+          <button type="button" class="more-menu-item menu-item" id="btn-more-share" data-close>
+            <span class="more-menu-icon" aria-hidden="true">
+              <svg class="i" aria-hidden="true"><use href="#i-share" /></svg>
+            </span>
+            <span class="more-menu-label">Copiar link público</span>
+          </button>
+        </div>
+
+        <!-- Ações administrativas de suporte preservadas no DOM -->
+        <button type="button" class="menu-item menu-item-danger admin-only" id="btn-more-reset" data-close style="display: none;">
+          <svg class="i" aria-hidden="true"><use href="#i-trash" /></svg>
           <span>Zerar dados</span>
         </button>
-        <button type="button" class="menu-item" id="btn-more-trocar" data-close>
-          <svg class="i" aria-hidden="true">
-            <use href="#i-logout" />
-          </svg>
+        <button type="button" class="menu-item" id="btn-more-trocar" data-close style="display: none;">
+          <svg class="i" aria-hidden="true"><use href="#i-logout" /></svg>
           <span>Sair do futebol</span>
         </button>
       </div>
@@ -1184,11 +1187,6 @@
     </div>
   </div>
 
-  <!-- Configuração Supabase -->
-  <script>
-    window.__SUPABASE_URL__ = 'https://bufbpmznfzikbrlmwxxt.supabase.co';
-    window.__SUPABASE_ANON_KEY__ = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ1ZmJwbXpuZnppa2JybG13eHh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExNTQ3MDksImV4cCI6MjEwNjczMDcwOX0.47poDxvaUuyRIWMnzUWYozsT2admN1M9AEuJGtVZv38';
-  </script>
 
   <!-- Aplicação -->
   <script type="module" src="./js/app.js"></script>

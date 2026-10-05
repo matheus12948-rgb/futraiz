@@ -46,20 +46,93 @@ export const Storage = {
   currentFutebol: null, // { id, codigo_publico, nome, admin_id }
   userRole: null, // 'ADMIN' | 'PUBLIC_VIEWER'
   realtimeSubscription: null,
+  _store: store,
 
-  init() {
-    this.restoreSession();
+  async init() {
+    await this.restoreSession();
   },
 
-  restoreSession() {
+  async restoreSession() {
     try {
+      // 1. Diagnóstico e verificação de usuário autenticado no Supabase
+      let authUser = null;
+      try {
+        if (supabase && supabase.auth) {
+          const { data: sessionData } = await supabase.auth.getSession();
+          if (sessionData?.session?.user) {
+            authUser = sessionData.session.user;
+          } else {
+            const { data: userData } = await supabase.auth.getUser();
+            authUser = userData?.user || null;
+          }
+        }
+      } catch (authErr) {
+        console.warn('[Storage] Erro ao consultar Supabase auth na restauração:', authErr);
+      }
+
+      if (authUser) {
+        console.log(`[FutRaiz][AUTH] userId: ${authUser.id}`);
+      }
+
+      // 2. Restaura futebol ativo da preferência local ou busca do Supabase
       const savedFut = store.getItem(STORAGE_KEYS.CURRENT_FUTEBOL);
       if (savedFut) {
-        this.currentFutebol = JSON.parse(savedFut);
+        try {
+          this.currentFutebol = JSON.parse(savedFut);
+        } catch {
+          this.currentFutebol = null;
+        }
       }
-      this.userRole = store.getItem(STORAGE_KEYS.USER_ROLE) || 'PUBLIC_VIEWER';
+      this.userRole = store.getItem(STORAGE_KEYS.USER_ROLE) || (authUser ? 'ADMIN' : 'PUBLIC_VIEWER');
+
+      // Se autenticado mas sem futebol salvo no localStorage (ex: primeiro acesso no computador)
+      if (authUser && !this.currentFutebol) {
+        try {
+          const { data: adminLinks } = await supabase
+            .from('futebol_admins')
+            .select('*')
+            .eq('user_id', authUser.id);
+
+          if (adminLinks && adminLinks.length > 0) {
+            const { data: fut } = await supabase
+              .from('futebois')
+              .select('*')
+              .eq('id', adminLinks[0].futebol_id)
+              .single();
+            if (fut) {
+              this.currentFutebol = fut;
+              this.userRole = 'ADMIN';
+              store.setItem(STORAGE_KEYS.CURRENT_FUTEBOL, JSON.stringify(fut));
+              store.setItem(STORAGE_KEYS.USER_ROLE, 'ADMIN');
+            }
+          } else {
+            const { data: futs } = await supabase
+              .from('futebois')
+              .select('*')
+              .eq('admin_id', authUser.id)
+              .order('created_at', { ascending: false })
+              .limit(1);
+            const foundFut = Array.isArray(futs) ? futs[0] : futs;
+            if (foundFut) {
+              this.currentFutebol = foundFut;
+              this.userRole = 'ADMIN';
+              store.setItem(STORAGE_KEYS.CURRENT_FUTEBOL, JSON.stringify(foundFut));
+              store.setItem(STORAGE_KEYS.USER_ROLE, 'ADMIN');
+            }
+          }
+        } catch (findErr) {
+          console.warn('[Storage] Erro ao recuperar futebol do administrador:', findErr);
+        }
+      }
+
+      // 3. Se temos futebol ativo, conecta realtime e sincroniza dados oficiais do Supabase
       if (this.currentFutebol) {
+        console.log(`[FutRaiz][FUTEBOL] futebolId: ${this.currentFutebol.id}`);
         this.setupRealtime(this.currentFutebol.id);
+        await this.syncPlayersFromSupabase(this.currentFutebol.id);
+        await this.syncCapasFromSupabase(this.currentFutebol.id);
+        await this.syncMatchesFromSupabase(this.currentFutebol.id);
+        await this.syncRoundsFromSupabase(this.currentFutebol.id);
       }
     } catch (e) {
       console.warn('Erro ao restaurar sessão de futebol:', e);
@@ -68,9 +141,9 @@ export const Storage = {
     }
   },
 
-  // Retorna a chave de armazenamento isolada para o futebol atual
-  _getScopedKey(suffix) {
-    const futId = this.currentFutebol ? this.currentFutebol.id : 'global';
+  // Retorna a chave de armazenamento isolada para o futebol atual (ou futebol especificado)
+  _getScopedKey(suffix, targetFutId = null) {
+    const futId = targetFutId || (this.currentFutebol ? this.currentFutebol.id : 'global');
     return `fut_${futId}_${suffix}`;
   },
 
@@ -393,16 +466,20 @@ export const Storage = {
   /**
    * Login do Administrador
    */
-  async loginAdmin({ email, password }) {
+  async loginAdmin(credentials, maybePassword) {
     try {
+      const email = (typeof credentials === 'object' && credentials !== null) ? credentials.email : credentials;
+      const password = (typeof credentials === 'object' && credentials !== null) ? credentials.password : maybePassword;
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
+        email: (email || '').trim(),
         password
       });
 
       if (authError) throw new Error(this._formatAuthError(authError));
 
       const user = authData.user;
+      console.log(`[FutRaiz][AUTH] userId: ${user.id}`);
+
       // Busca futebóis onde o usuário é administrador
       const { data: adminLinks } = await supabase
         .from('futebol_admins')
@@ -418,18 +495,34 @@ export const Storage = {
           .eq('id', futId)
           .single();
         targetFutebol = fut;
-      } else {
-        // Fallback por admin_id direto
-        const { data: fut } = await supabase
+      }
+
+      if (!targetFutebol) {
+        // Fallback por admin_id direto (ordenando pelo mais recente)
+        const { data: futs } = await supabase
           .from('futebois')
           .select('*')
           .eq('admin_id', user.id)
-          .single();
-        targetFutebol = fut;
+          .order('created_at', { ascending: false })
+          .limit(1);
+        targetFutebol = Array.isArray(futs) ? futs[0] : futs;
       }
 
       if (!targetFutebol) {
         throw new Error('Nenhum futebol associado a este usuário administrador.');
+      }
+
+      console.log(`[FutRaiz][FUTEBOL] futebolId: ${targetFutebol.id}`);
+
+      // Garante que o vínculo em futebol_admins exista no Supabase para satisfazer políticas RLS
+      try {
+        await supabase.from('futebol_admins').upsert({
+          futebol_id: targetFutebol.id,
+          user_id: user.id,
+          role: 'admin'
+        }, { onConflict: 'futebol_id,user_id' });
+      } catch (linkErr) {
+        console.warn('[Storage] Aviso ao assegurar adminLink:', linkErr);
       }
 
       this.currentFutebol = targetFutebol;
@@ -446,6 +539,7 @@ export const Storage = {
       this._emitChange('authChanged', targetFutebol);
       return { success: true, futebol: targetFutebol };
     } catch (err) {
+      console.error('[FutRaiz][AUTH] Erro no login:', err);
       return { success: false, error: err.message };
     }
   },
@@ -717,11 +811,13 @@ export const Storage = {
         await this.syncStandingsSnapshotsFromSupabase(futebolId);
         this._emitChange('standingsSnapshot', null);
       });
-      channel.on('postgres_changes', { event: '*', schema: 'public', table: 'jogadores' }, async () => {
+      channel.on('postgres_changes', { event: '*', schema: 'public', table: 'jogadores' }, async (payload) => {
+        if (payload?.new && payload.new.futebol_id && payload.new.futebol_id !== futebolId) return;
         await this.syncPlayersFromSupabase(futebolId);
-        this._emitChange('players', this.getPlayers());
+        this._emitChange('players', this.getPlayers(futebolId));
       });
-      channel.on('postgres_changes', { event: '*', schema: 'public', table: 'capas' }, async () => {
+      channel.on('postgres_changes', { event: '*', schema: 'public', table: 'capas' }, async (payload) => {
+        if (payload?.new && payload.new.futebol_id && payload.new.futebol_id !== futebolId) return;
         await this.syncCapasFromSupabase(futebolId);
         this._emitChange('capas', this.getCapas());
       });
@@ -742,9 +838,9 @@ export const Storage = {
   // ============================================================================
   // CADASTRO GERAL DE JOGADORES (ISOLADO POR FUTEBOL)
   // ============================================================================
-  getPlayers() {
+  getPlayers(futebolId = null) {
     try {
-      const key = this._getScopedKey('players');
+      const key = this._getScopedKey('players', futebolId);
       const data = store.getItem(key);
       if (!data) return [];
       const parsed = JSON.parse(data);
@@ -767,6 +863,9 @@ export const Storage = {
       const isHistAberto = this.isHistoricoInicialAberto();
 
       const normalized = (players || []).map(p => {
+        if (!p.id) {
+          p.id = Utils.generateUUID();
+        }
         const existing = existingMap.get(p.id);
         if (!isHistAberto) {
           if (!existing) {
@@ -795,21 +894,31 @@ export const Storage = {
       const key = this._getScopedKey('players');
       store.setItem(key, JSON.stringify(normalized));
 
-      // Sincroniza com Supabase preservando chaves e histórico
+      // Sincroniza com Supabase preservando chaves e histórico com UUID válido
       if (this.currentFutebol) {
         const futId = this.currentFutebol.id;
-        const rows = normalized.map(p => ({
-          id: p.id || Utils.generateUUID(),
-          futebol_id: futId,
-          nome: p.name,
-          estrelas: p.stars,
-          gols_historicos_iniciais: p.gols_historicos_iniciais,
-          capas_historicas_iniciais: p.capas_historicas_iniciais,
-          created_at: p.createdAt || new Date().toISOString()
-        }));
+        const rows = normalized.map(p => {
+          return {
+            id: p.id,
+            futebol_id: futId,
+            nome: p.name,
+            estrelas: p.stars,
+            gols_historicos_iniciais: p.gols_historicos_iniciais || 0,
+            capas_historicas_iniciais: p.capas_historicas_iniciais || 0,
+            created_at: p.createdAt || new Date().toISOString()
+          };
+        });
 
-        Promise.resolve(supabase.from('jogadores').upsert(rows, { onConflict: 'id' })).catch(err => {
-          console.warn('[Storage.savePlayers] Erro supabase upsert jogadores:', err);
+        store.setItem(key, JSON.stringify(normalized));
+
+        Promise.resolve(supabase.from('jogadores').upsert(rows, { onConflict: 'id' })).then(res => {
+          if (res?.error) {
+            console.error('[FutRaiz][JOGADORES] erro Supabase upsert jogadores:', res.error);
+          } else {
+            console.log(`[FutRaiz][JOGADORES] ${rows.length} jogadores sincronizados no Supabase.`);
+          }
+        }).catch(err => {
+          console.warn('[FutRaiz][JOGADORES] erro Supabase upsert jogadores:', err);
         });
       }
 
@@ -955,11 +1064,12 @@ export const Storage = {
         created_at: newPlayer.createdAt
       };
 
-      const { error } = await supabase.from('jogadores').insert([dbRow]);
+      const { data, error } = await supabase.from('jogadores').insert([dbRow]).select();
       if (error) {
-        console.error('[Storage.addPlayer] Erro Supabase ao cadastrar jogador:', error);
+        console.error('[FutRaiz][JOGADORES] erro Supabase ao cadastrar jogador:', error);
         throw new Error(error.message || 'Erro ao cadastrar jogador no Supabase.');
       }
+      console.log(`[FutRaiz][JOGADORES] Gravado com sucesso no Supabase. id: ${newId} | nome: ${cleanName}`);
     }
 
     const players = this.getPlayers();
@@ -980,9 +1090,10 @@ export const Storage = {
       const futId = this.currentFutebol.id;
       const { error } = await supabase.from('jogadores').delete().eq('id', playerId).eq('futebol_id', futId);
       if (error) {
-        console.error('[Storage.deletePlayer] Erro Supabase ao excluir jogador:', error);
+        console.error('[FutRaiz][JOGADORES] erro Supabase ao excluir jogador:', error);
         throw new Error(error.message || 'Erro ao excluir jogador no Supabase.');
       }
+      console.log(`[FutRaiz][JOGADORES] Jogador ${playerId} removido com sucesso do Supabase.`);
     }
 
     const updated = players.filter(p => p.id !== playerId);
@@ -1099,16 +1210,28 @@ export const Storage = {
   },
 
   async syncPlayersFromSupabase(futebolId) {
-    if (!futebolId) return;
+    if (!futebolId) return { success: false, reason: 'no_futebol_id' };
     try {
-      const { data: dbPlayers } = await supabase
+      console.log(`[FutRaiz][FUTEBOL] futebolId: ${futebolId}`);
+
+      // 1. Consulta oficial dos jogadores no Supabase
+      const { data: dbPlayers, error } = await supabase
         .from('jogadores')
         .select('*')
-        .eq('futebol_id', futebolId);
+        .eq('futebol_id', futebolId)
+        .order('created_at', { ascending: true });
 
+      if (error) {
+        console.error(`[FutRaiz][JOGADORES] erro ao consultar Supabase:`, error);
+        return { success: false, error: error.message };
+      }
+
+      const localPlayers = this.getPlayers(futebolId);
+      console.log(`[FutRaiz][JOGADORES] quantidade no Supabase: ${dbPlayers ? dbPlayers.length : 0} | no localStorage: ${localPlayers.length}`);
+
+      // CENÁRIO A: Supabase possui jogadores (FONTE OFICIAL)
       if (dbPlayers && Array.isArray(dbPlayers) && dbPlayers.length > 0) {
-        const localPlayers = this.getPlayers();
-        const merged = dbPlayers.map(dp => {
+        const mapped = dbPlayers.map(dp => {
           const existing = localPlayers.find(lp => lp.id === dp.id);
           return {
             id: dp.id,
@@ -1119,12 +1242,120 @@ export const Storage = {
             createdAt: dp.created_at || (existing ? existing.createdAt : new Date().toISOString())
           };
         });
-        const key = this._getScopedKey('players');
-        store.setItem(key, JSON.stringify(merged));
-        this._emitChange('players', merged);
+
+        // Se este dispositivo (ex: celular do admin) contiver jogadores locais pendentes não enviados:
+        if (this.isAdmin()) {
+          const missingInDb = localPlayers.filter(lp =>
+            !mapped.some(mp => mp.id === lp.id || (mp.name.trim().toLowerCase() === lp.name.trim().toLowerCase()))
+          );
+          if (missingInDb.length > 0) {
+            console.log(`[FutRaiz][JOGADORES] sincronizando ${missingInDb.length} jogador(es) locais pendentes para o Supabase...`);
+            const rowsToInsert = missingInDb.map(p => ({
+              id: Utils.isUUID(p.id) ? p.id : Utils.generateUUID(),
+              futebol_id: futebolId,
+              nome: p.name.trim(),
+              estrelas: p.stars || 3,
+              gols_historicos_iniciais: p.gols_historicos_iniciais || 0,
+              capas_historicas_iniciais: p.capas_historicas_iniciais || 0,
+              created_at: p.createdAt || new Date().toISOString()
+            }));
+
+            try {
+              const { data: inserted, error: insErr } = await supabase.from('jogadores').upsert(rowsToInsert, { onConflict: 'id' }).select();
+              if (!insErr && inserted) {
+                inserted.forEach(insp => {
+                  if (!mapped.some(m => m.id === insp.id)) {
+                    mapped.push({
+                      id: insp.id,
+                      name: insp.nome,
+                      stars: insp.estrelas,
+                      gols_historicos_iniciais: Number(insp.gols_historicos_iniciais) || 0,
+                      capas_historicas_iniciais: Number(insp.capas_historicas_iniciais) || 0,
+                      createdAt: insp.created_at
+                    });
+                  }
+                });
+              }
+            } catch (errSync) {
+              console.warn('[FutRaiz][JOGADORES] aviso ao enviar jogadores pendentes:', errSync);
+            }
+          }
+        }
+
+        const key = this._getScopedKey('players', futebolId);
+        store.setItem(key, JSON.stringify(mapped));
+        console.log(`[FutRaiz][JOGADORES] quantidade: ${mapped.length}`);
+        console.log(`[FutRaiz][JOGADORES] origem: Supabase`);
+        this._emitChange('players', mapped);
+        return { success: true, count: mapped.length, players: mapped };
       }
+
+      // CENÁRIO B: Supabase está com 0 jogadores para este futebol
+      // Se este dispositivo tem jogadores no localStorage (ex: celular onde foram cadastrados antes):
+      if (localPlayers.length > 0) {
+        if (this.isAdmin()) {
+          console.log(`[FutRaiz][JOGADORES] Supabase vazio (0). Enviando ${localPlayers.length} jogadores do localStorage para o Supabase...`);
+          const rowsToInsert = localPlayers.map(p => ({
+            id: Utils.isUUID(p.id) ? p.id : Utils.generateUUID(),
+            futebol_id: futebolId,
+            nome: p.name.trim(),
+            estrelas: p.stars || 3,
+            gols_historicos_iniciais: p.gols_historicos_iniciais || 0,
+            capas_historicas_iniciais: p.capas_historicas_iniciais || 0,
+            created_at: p.createdAt || new Date().toISOString()
+          }));
+
+          try {
+            const { data: inserted, error: insErr } = await supabase.from('jogadores').upsert(rowsToInsert, { onConflict: 'id' }).select();
+            if (insErr) {
+              console.error(`[FutRaiz][JOGADORES] erro ao persistir jogadores no Supabase:`, insErr);
+              // Proteção rigorosa: NUNCA apagar jogadores locais se a inserção no Supabase falhar!
+              return { success: false, error: insErr.message, count: localPlayers.length, players: localPlayers };
+            } else {
+              const syncedPlayers = (inserted && inserted.length > 0) ? inserted.map(insp => ({
+                id: insp.id,
+                name: insp.nome,
+                stars: insp.estrelas,
+                gols_historicos_iniciais: Number(insp.gols_historicos_iniciais) || 0,
+                capas_historicas_iniciais: Number(insp.capas_historicas_iniciais) || 0,
+                createdAt: insp.created_at
+              })) : rowsToInsert.map(r => ({
+                id: r.id,
+                name: r.nome,
+                stars: r.estrelas,
+                gols_historicos_iniciais: r.gols_historicos_iniciais,
+                capas_historicas_iniciais: r.capas_historicas_iniciais,
+                createdAt: r.created_at
+              }));
+
+              const key = this._getScopedKey('players', futebolId);
+              store.setItem(key, JSON.stringify(syncedPlayers));
+              console.log(`[FutRaiz][JOGADORES] quantidade: ${syncedPlayers.length}`);
+              console.log(`[FutRaiz][JOGADORES] origem: Supabase (sincronizados do dispositivo)`);
+              this._emitChange('players', syncedPlayers);
+              return { success: true, count: syncedPlayers.length, players: syncedPlayers };
+            }
+          } catch (errSync) {
+            console.error(`[FutRaiz][JOGADORES] erro na sincronização para o Supabase:`, errSync);
+            // Proteção: preserva jogadores locais
+            return { success: false, error: errSync.message, count: localPlayers.length, players: localPlayers };
+          }
+        } else {
+          // Usuário local não autenticado como admin ou visualizador: preserva os dados locais
+          return { success: true, count: localPlayers.length, players: localPlayers };
+        }
+      }
+
+      // CENÁRIO C: Supabase vazio e localStorage vazio (novo futebol sem jogadores)
+      const key = this._getScopedKey('players', futebolId);
+      store.setItem(key, JSON.stringify([]));
+      console.log(`[FutRaiz][JOGADORES] quantidade: 0`);
+      console.log(`[FutRaiz][JOGADORES] origem: Supabase`);
+      this._emitChange('players', []);
+      return { success: true, count: 0, players: [] };
     } catch (err) {
-      console.warn('[Storage] Erro ao sincronizar jogadores:', err);
+      console.error(`[FutRaiz][JOGADORES] erro inesperado em syncPlayersFromSupabase:`, err);
+      return { success: false, error: err.message };
     }
   },
 

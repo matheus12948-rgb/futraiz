@@ -2707,69 +2707,188 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   }
 }
 
-/* Sheet "Mais" no Mobile */
-.modal-sheet-wrap {
-  align-items: flex-end;
-  padding: 0;
+/* ==========================================================================
+   MENU "MAIS" (MODAL SHEET COMPACTO & AGRUPADO)
+   Design moderno sem cards gigantes flutuantes. Cabeçalho limpo com 2 grupos:
+   1. Rankings, Histórico, Configurações em lista agrupada única com divisórias.
+   2. Copiar link público em bloco separado com altura proporcional.
+   ========================================================================== */
+#modal-more-menu {
+  padding: 16px;
+  box-sizing: border-box;
 }
 
-.modal-sheet {
-  max-width: 100%;
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
-  padding: 1.25rem 1rem 2rem 1rem;
-  border-left: none;
-  border-right: none;
-  border-bottom: none;
+#modal-more-menu .modal-card,
+#modal-more-menu .more-menu-card {
+  width: min(100% - 24px, 440px) !important;
+  max-width: 440px !important;
+  margin: auto !important;
+  border-radius: var(--radius-lg, 16px) !important;
+  padding: 0 !important;
+  background: var(--bg-surface, #0d1a2d) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6) !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
 }
 
-.menu-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.menu-section {
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-dim);
-  margin: 0.75rem 0 0.25rem 0.5rem;
-}
-
-.menu-item {
-  width: 100%;
+#modal-more-menu .more-menu-header {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 0.85rem;
-  border-radius: var(--radius-md);
-  font-size: 0.925rem;
-  font-weight: 600;
-  color: var(--text-main);
-  background: var(--bg-surface-2);
-  border: 1px solid var(--border-subtle);
-  text-align: left;
+  justify-content: space-between;
+  padding: 0.85rem 1.15rem !important;
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: transparent;
+  width: 100%;
+  box-sizing: border-box;
 }
 
-.menu-item:hover {
+#modal-more-menu .more-menu-title {
+  font-family: var(--font-heading, 'Barlow Condensed', sans-serif);
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-main, #FFFFFF);
+  margin: 0;
+  line-height: 1;
+}
+
+#modal-more-menu .btn-close {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-surface-2, #142337);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  transition: all var(--transition-fast);
+}
+
+#modal-more-menu .btn-close:hover {
+  color: var(--text-main);
   border-color: var(--border);
   background: var(--bg-card);
 }
 
-.menu-chevron {
+#modal-more-menu .btn-close svg {
+  width: 16px !important;
+  height: 16px !important;
+  display: block;
+}
+
+#modal-more-menu .more-menu-body {
+  padding: 1rem 1.15rem 1.15rem 1.15rem !important;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+/* Grupo Unificado de Opções (Container / Lista) */
+.more-menu-group {
+  background: var(--bg-surface-2, #101c2e);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-lg, 12px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.more-menu-group-action {
+  margin-top: 0;
+}
+
+/* Cada Item de Menu (64px - 72px de altura no mobile) */
+.more-menu-item {
+  width: 100%;
+  min-height: 66px;
+  height: 66px;
+  display: flex;
+  align-items: center;
+  padding: 0 1.15rem;
+  background: transparent;
+  border: none;
+  color: var(--text-main, #FFFFFF);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+/* Divisória interna elegante entre opções do mesmo bloco */
+.more-menu-group .more-menu-item + .more-menu-item {
+  border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+}
+
+.more-menu-item:hover,
+.more-menu-item:active {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Ícone à esquerda (22px - 24px) */
+.more-menu-icon {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0.95rem;
+  flex-shrink: 0;
+  color: var(--primary, #00E676);
+}
+
+.more-menu-icon svg,
+.more-menu-icon .i {
+  width: 22px !important;
+  height: 22px !important;
+  min-width: 22px !important;
+  min-height: 22px !important;
+  max-width: 22px !important;
+  max-height: 22px !important;
+  display: block;
+  stroke: currentColor;
+  fill: none;
+}
+
+/* Texto do item */
+.more-menu-label {
+  flex: 1;
+  font-family: var(--font-body, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+  font-size: 1.02rem;
+  font-weight: 600;
+  color: var(--text-main, #FFFFFF);
+  text-align: left;
+}
+
+/* Seta ">" à direita */
+.more-menu-item .menu-chevron {
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  max-width: 16px !important;
   margin-left: auto;
-  color: var(--text-dim);
+  color: var(--text-dim, #64748B);
+  flex-shrink: 0;
+  display: block;
+  transition: transform var(--transition-fast), color var(--transition-fast);
 }
 
-.menu-item-danger {
-  color: #FCA5A5;
-}
-
-.menu-item-danger:hover {
-  border-color: var(--danger-border);
-  background: var(--danger-subtle);
+.more-menu-item:hover .menu-chevron {
+  color: var(--text-muted);
+  transform: translateX(2px);
 }
 
 /* ==========================================================================

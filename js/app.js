@@ -41,6 +41,8 @@ export const App = {
     this.bindGlobalEvents();
     this.bindPlatformModals();
 
+    await Storage.init();
+
     this.safeInit('Jogadores', () => Jogadores.init());
     this.safeInit('Sorteio', () => Sorteio.init());
     this.safeInit('Programacao', () => Programacao.init());
@@ -576,8 +578,14 @@ export const App = {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
     try {
-      if (screenId === 'dashboard') this.renderDashboard();
-      else if (screenId === 'jogadores') Jogadores.render();
+      if (screenId === 'dashboard') {
+        this.renderDashboard();
+      } else if (screenId === 'jogadores') {
+        Jogadores.render();
+        if (Storage.currentFutebol) {
+          Storage.syncPlayersFromSupabase(Storage.currentFutebol.id).catch(() => {});
+        }
+      }
       else if (screenId === 'sorteio') Sorteio.render();
       else if (screenId === 'partida') Partidas.render();
       else if (screenId === 'tabela') Tabela.render();

@@ -21,6 +21,13 @@ export const Utils = {
     });
   },
 
+  // Valida se a string é um UUID válido padrão RFC 4122
+  isUUID(str) {
+    if (!str || typeof str !== 'string') return false;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(str.trim());
+  },
+
   // Formata data em DD/MM/AAAA
   formatDate(dateObj = new Date()) {
     const d = new Date(dateObj);
