@@ -130,8 +130,9 @@ export const Storage = {
       const codigoPublico = this.generatePublicCode();
 
       // 3. Registra o futebol no Supabase (padrão 7 minutos = 420 segundos)
-      const futebolRecord = {
-        id: Utils.generateId('fut'),
+      // O banco Supabase possui futebois.id como UUID com DEFAULT gen_random_uuid().
+      // Não enviamos ID com prefixo "fut_...". O PostgreSQL/Supabase gera o UUID automaticamente.
+      const insertPayload = {
         codigo_publico: codigoPublico,
         nome: nome.trim(),
         admin_id: user.id,
@@ -142,11 +143,32 @@ export const Storage = {
 
       const { data: futData, error: futError } = await supabase
         .from('futebois')
-        .insert([futebolRecord]);
+        .insert([insertPayload])
+        .select()
+        .single();
 
       if (futError) throw new Error(futError.message);
 
-      // 4. Vincula na tabela de administradores do futebol
+      let futebolRecord = futData;
+      if (!futebolRecord || !futebolRecord.id) {
+        // Fallback por código público caso a inserção não tenha retornado o registro
+        const { data: fetched } = await supabase
+          .from('futebois')
+          .select('*')
+          .eq('codigo_publico', codigoPublico)
+          .single();
+        futebolRecord = fetched;
+      }
+
+      if (!futebolRecord || !futebolRecord.id) {
+        throw new Error('Não foi possível obter o identificador UUID do futebol criado.');
+      }
+
+      if (!futebolRecord.default_match_duration_seconds) {
+        futebolRecord.default_match_duration_seconds = 420;
+      }
+
+      // 4. Vincula na tabela de administradores do futebol usando o UUID retornado
       const adminLink = {
         futebol_id: futebolRecord.id,
         user_id: user.id,
@@ -154,7 +176,8 @@ export const Storage = {
         created_at: new Date().toISOString()
       };
 
-      await supabase.from('futebol_admins').insert([adminLink]);
+      const { error: adminLinkError } = await supabase.from('futebol_admins').insert([adminLink]);
+      if (adminLinkError) throw new Error(adminLinkError.message);
 
       // 5. Define sessão ativa como Administrador
       this.currentFutebol = futebolRecord;

@@ -13,10 +13,10 @@
  * 10. Confirmar que Capa só é atribuída no ENCERRAR NOITE aos 5 atletas do campeão.
  */
 
-import { Storage } from './js/storage.js';
-import { Partidas } from './js/partidas.js';
-import { Tabela } from './js/tabela.js';
-import { Utils } from './js/utils.js';
+import { Storage } from '../js/storage.js';
+import { Partidas } from '../js/partidas.js';
+import { Tabela } from '../js/tabela.js';
+import { Utils } from '../js/utils.js';
 
 // Setup Mock do LocalStorage e DOM para execução no Node
 const mockStorage = {};
@@ -113,7 +113,7 @@ async function runTestEmpate() {
 
   // 1. SETUP DE DADOS
   Storage.init();
-  Storage.currentFutebol = { id: 'fut_tie_test', nome: 'Fut Tie Test', admin_id: 'admin_123' };
+  Storage.currentFutebol = { id: 'd0000000-0000-4000-8000-000000000004', nome: 'Fut Tie Test', admin_id: 'admin_123' };
   Storage.userRole = 'ADMIN';
 
   const mockTeams = {

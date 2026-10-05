@@ -11,9 +11,9 @@
  * - Validação das regras CSS de layout e responsividade
  */
 
-import { Storage } from './js/storage.js';
-import { Partidas } from './js/partidas.js';
-import { Utils } from './js/utils.js';
+import { Storage } from '../js/storage.js';
+import { Partidas } from '../js/partidas.js';
+import { Utils } from '../js/utils.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -135,7 +135,7 @@ async function runModalGolTests() {
   // 1. SETUP DE DADOS
   console.log('--- ETAPA 1: Setup do Futebol e Times ---');
   Storage.init();
-  const testFut = { id: 'fut_modal_test', nome: 'Fut Modal Test', admin_id: 'admin_123' };
+  const testFut = { id: 'c0000000-0000-4000-8000-000000000003', nome: 'Fut Modal Test', admin_id: 'admin_123' };
   Storage.currentFutebol = testFut;
   Storage.userRole = 'ADMIN';
 
@@ -298,7 +298,7 @@ async function runModalGolTests() {
 
   // 9. VALIDAÇÃO DE CSS E RESPONSIVIDADE
   console.log('\n--- ETAPA 9: Validação de Regras CSS (Posicionamento, Overflow, Mobile) ---');
-  const cssContent = fs.readFileSync(path.join(__dirname, 'css/style.css'), 'utf8');
+  const cssContent = fs.readFileSync(path.join(__dirname, '../css/style.css'), 'utf8');
 
   assert(cssContent.includes('.modal,') && cssContent.includes('position: fixed;'), 'CSS modal tem position: fixed');
   assert(cssContent.includes('z-index: 9999;'), 'CSS modal tem z-index: 9999');

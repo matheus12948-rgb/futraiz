@@ -24,14 +24,14 @@
  * 20. Testar dois futebol_id diferentes.
  */
 
-import { Storage } from './js/storage.js';
-import { Partidas } from './js/partidas.js';
-import { Tabela } from './js/tabela.js';
-import { Rankings } from './js/rankings.js';
-import { Jogadores } from './js/jogadores.js';
-import { Configuracoes } from './js/configuracoes.js';
-import { Utils } from './js/utils.js';
-import { supabase } from './js/supabaseClient.js';
+import { Storage } from '../js/storage.js';
+import { Partidas } from '../js/partidas.js';
+import { Tabela } from '../js/tabela.js';
+import { Rankings } from '../js/rankings.js';
+import { Jogadores } from '../js/jogadores.js';
+import { Configuracoes } from '../js/configuracoes.js';
+import { Utils } from '../js/utils.js';
+import { supabase } from '../js/supabaseClient.js';
 
 // Setup Mock do LocalStorage e DOM para execução no Node
 const mockStorage = {};

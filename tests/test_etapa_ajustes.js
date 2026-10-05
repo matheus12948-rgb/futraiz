@@ -81,11 +81,11 @@ global.window = {
 };
 global.requestAnimationFrame = (cb) => setTimeout(cb, 0);
 
-import { Storage } from './js/storage.js';
-import { Utils } from './js/utils.js';
-import { Tabela } from './js/tabela.js';
-import { Partidas } from './js/partidas.js';
-import { Configuracoes } from './js/configuracoes.js';
+import { Storage } from '../js/storage.js';
+import { Utils } from '../js/utils.js';
+import { Tabela } from '../js/tabela.js';
+import { Partidas } from '../js/partidas.js';
+import { Configuracoes } from '../js/configuracoes.js';
 
 let passed = 0;
 let failed = 0;

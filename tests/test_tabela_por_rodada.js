@@ -14,11 +14,11 @@
  * 10. Acesso de Usuário Admin e Usuário Público via código.
  */
 
-import { Storage } from './js/storage.js';
-import { Partidas } from './js/partidas.js';
-import { Tabela } from './js/tabela.js';
-import { Utils } from './js/utils.js';
-import { supabase } from './js/supabaseClient.js';
+import { Storage } from '../js/storage.js';
+import { Partidas } from '../js/partidas.js';
+import { Tabela } from '../js/tabela.js';
+import { Utils } from '../js/utils.js';
+import { supabase } from '../js/supabaseClient.js';
 
 // Setup Mock do LocalStorage e DOM para execução no Node
 const mockStorage = {};
@@ -290,7 +290,7 @@ async function runTests() {
   // ============================================================================
   console.log('\n--- FASE 7: Simulação de Reload da Página e Sincronização Supabase ---');
   // Simula limpeza de cache de memória
-  mockStorage['fut_fut_1791169092831_x9rku6h_rodada_classificacao'] = undefined;
+  delete mockStorage[Storage._getScopedKey('rodada_classificacao')];
   await Storage.syncRoundsFromSupabase(Storage.currentFutebol.id);
   await Storage.syncMatchesFromSupabase(Storage.currentFutebol.id);
   await Storage.syncStandingsSnapshotsFromSupabase(Storage.currentFutebol.id);

@@ -19,11 +19,11 @@
  * 16. Atualizar a página e confirmar persistência.
  */
 
-import { Sorteio } from './js/sorteio.js';
-import { Tabela } from './js/tabela.js';
-import { Rankings } from './js/rankings.js';
-import { Storage } from './js/storage.js';
-import { Utils } from './js/utils.js';
+import { Sorteio } from '../js/sorteio.js';
+import { Tabela } from '../js/tabela.js';
+import { Rankings } from '../js/rankings.js';
+import { Storage } from '../js/storage.js';
+import { Utils } from '../js/utils.js';
 
 // Mock localStorage para execução no ambiente Node.js
 const mockStorage = {};
@@ -59,7 +59,7 @@ function assert(condition, message) {
   }
 }
 
-Storage.currentFutebol = { id: 'fut_test', nome: 'Futebol Teste', admin_id: 'admin_test', codigo_publico: 'FDT-TEST' };
+Storage.currentFutebol = { id: 'a0000000-0000-4000-8000-000000000001', nome: 'Futebol Teste', admin_id: 'admin_test', codigo_publico: 'FDT-TEST' };
 Storage.currentUser = { id: 'admin_test', email: 'admin@test.com' };
 Storage.userRole = 'ADMIN';
 

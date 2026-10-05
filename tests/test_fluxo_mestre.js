@@ -22,13 +22,13 @@
  * 18. Realtime atualiza público e administrador.
  */
 
-import { Storage } from './js/storage.js';
-import { Sorteio } from './js/sorteio.js';
-import { Partidas } from './js/partidas.js';
-import { Tabela } from './js/tabela.js';
-import { Rankings } from './js/rankings.js';
-import { Historico } from './js/historico.js';
-import { Utils } from './js/utils.js';
+import { Storage } from '../js/storage.js';
+import { Sorteio } from '../js/sorteio.js';
+import { Partidas } from '../js/partidas.js';
+import { Tabela } from '../js/tabela.js';
+import { Rankings } from '../js/rankings.js';
+import { Historico } from '../js/historico.js';
+import { Utils } from '../js/utils.js';
 
 // Setup Mock do LocalStorage e DOM para execução no Node
 const mockStorage = {};
@@ -102,7 +102,7 @@ async function runMasterTest() {
 
   // 1. Setup Futebol e Admin
   Storage.currentFutebol = {
-    id: 'fut_qgf_1',
+    id: 'b0000000-0000-4000-8000-000000000002',
     nome: 'Futebol Quem Ganha Fica',
     admin_id: 'admin_qgf',
     codigo_publico: 'FDT-QGF'

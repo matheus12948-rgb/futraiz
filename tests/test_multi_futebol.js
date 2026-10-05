@@ -22,12 +22,12 @@ global.document = {
   body: { classList: { add: () => {}, remove: () => {} } }
 };
 
-import { Storage } from './js/storage.js';
-import { supabase } from './js/supabaseClient.js';
-import { Sorteio } from './js/sorteio.js';
-import { Tabela } from './js/tabela.js';
-import { Rankings } from './js/rankings.js';
-import { Utils } from './js/utils.js';
+import { Storage } from '../js/storage.js';
+import { supabase } from '../js/supabaseClient.js';
+import { Sorteio } from '../js/sorteio.js';
+import { Tabela } from '../js/tabela.js';
+import { Rankings } from '../js/rankings.js';
+import { Utils } from '../js/utils.js';
 
 let passed = 0;
 let failed = 0;
@@ -54,6 +54,7 @@ async function runTests() {
   // 1. Criar futebol A
   // ----------------------------------------------------------------------------
   console.log('--- TESTES 1 a 4: Criação de Futebóis e Administradores ---');
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   const resA = await Storage.createFutebol({
     nome: 'Futebol dos Campeões A',
     adminNome: 'Admin Carlos',
@@ -61,7 +62,7 @@ async function runTests() {
     password: 'senhaSegura123'
   });
   const futA = resA.futebol;
-  assert(resA.success && futA && futA.id, 1, `Futebol A criado com sucesso (${futA.nome})`);
+  assert(resA.success && futA && futA.id && uuidRegex.test(futA.id), 1, `Futebol A criado com sucesso (${futA.nome}) com UUID válido: ${futA.id}`);
 
   // ----------------------------------------------------------------------------
   // 2. Criar futebol B
@@ -73,7 +74,7 @@ async function runTests() {
     password: 'senhaSegura456'
   });
   const futB = resB.futebol;
-  assert(resB.success && futB && futB.id, 2, `Futebol B criado com sucesso (${futB.nome})`);
+  assert(resB.success && futB && futB.id && uuidRegex.test(futB.id), 2, `Futebol B criado com sucesso (${futB.nome}) com UUID válido: ${futB.id}`);
 
   // ----------------------------------------------------------------------------
   // 3. Confirmar IDs diferentes

@@ -16,10 +16,10 @@
  * 13. Capa não é alterada pela atualização da tabela.
  */
 
-import { Storage } from './js/storage.js';
-import { Partidas } from './js/partidas.js';
-import { Tabela } from './js/tabela.js';
-import { Utils } from './js/utils.js';
+import { Storage } from '../js/storage.js';
+import { Partidas } from '../js/partidas.js';
+import { Tabela } from '../js/tabela.js';
+import { Utils } from '../js/utils.js';
 
 // Setup Mock do LocalStorage e DOM para execução no Node
 const mockStorage = {};

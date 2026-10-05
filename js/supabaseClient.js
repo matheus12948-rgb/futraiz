@@ -114,7 +114,12 @@ class LocalSupabaseEngine {
       return { data: null, error: { message: 'Usuário já cadastrado com este e-mail.' } };
     }
     const user = {
-      id: 'usr_' + Date.now() + '_' + Math.random().toString(36).substr(2, 7),
+      id: (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+        ? crypto.randomUUID()
+        : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+            const r = (Math.random() * 16) | 0;
+            return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+          }),
       email: email.toLowerCase(),
       password,
       user_metadata: options.data || {},
@@ -201,7 +206,10 @@ class LocalSupabaseEngine {
       _insertRows: null,
 
       select(columns = '*') {
-        this._operation = 'SELECT';
+        if (this._operation !== 'INSERT' && this._operation !== 'UPDATE' && this._operation !== 'DELETE') {
+          this._operation = 'SELECT';
+        }
+        this._selectColumns = columns;
         return this;
       },
 
@@ -252,7 +260,14 @@ class LocalSupabaseEngine {
             }
 
             for (const row of rowsArr) {
-              if (!row.id) row.id = 'id_' + Date.now() + '_' + Math.random().toString(36).substr(2, 7);
+              if (!row.id) {
+                row.id = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+                  ? crypto.randomUUID()
+                  : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                      const r = (Math.random() * 16) | 0;
+                      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+                    });
+              }
               if (!row.created_at) row.created_at = new Date().toISOString();
 
               if (tableName !== 'futebois' && tableName !== 'futebol_admins') {
