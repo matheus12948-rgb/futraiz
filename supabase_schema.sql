@@ -62,8 +62,20 @@ CREATE TABLE IF NOT EXISTS public.rodadas (
     campeao_time_id TEXT,
     campeao_time_nome TEXT,
     programacao JSONB DEFAULT '[]'::jsonb NOT NULL,
+    teams JSONB DEFAULT '{}'::jsonb NOT NULL,
+    selected_player_ids JSONB DEFAULT '[]'::jsonb NOT NULL,
+    selected_players JSONB DEFAULT '[]'::jsonb NOT NULL,
+    draw_info JSONB DEFAULT '{}'::jsonb NOT NULL,
+    standings_snapshot JSONB DEFAULT NULL,
     created_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
+
+-- Migração segura para colunas de estado de rodada
+ALTER TABLE public.rodadas ADD COLUMN IF NOT EXISTS teams JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.rodadas ADD COLUMN IF NOT EXISTS selected_player_ids JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.rodadas ADD COLUMN IF NOT EXISTS selected_players JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.rodadas ADD COLUMN IF NOT EXISTS draw_info JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.rodadas ADD COLUMN IF NOT EXISTS standings_snapshot JSONB DEFAULT NULL;
 
 -- ==============================================================================
 -- 6. TABELA: rodada_jogadores (Os 20 atletas selecionados para a rodada)
@@ -130,8 +142,45 @@ CREATE TABLE IF NOT EXISTS public.partida_ao_vivo (
     is_active BOOLEAN DEFAULT false NOT NULL,
     is_paused BOOLEAN DEFAULT true NOT NULL,
     gols JSONB DEFAULT '[]'::jsonb NOT NULL,
+    status TEXT DEFAULT 'ready' NOT NULL,
+    order_num INT DEFAULT 1 NOT NULL,
+    home_team_id TEXT DEFAULT 'time_1' NOT NULL,
+    away_team_id TEXT DEFAULT 'time_2' NOT NULL,
+    winner_team_id TEXT,
+    winner_team_name TEXT,
+    loser_team_id TEXT,
+    is_tie BOOLEAN DEFAULT false NOT NULL,
+    waiting_next_opponent BOOLEAN DEFAULT false NOT NULL,
+    waiting_tie_next_match BOOLEAN DEFAULT false NOT NULL,
+    tie_next_match JSONB DEFAULT NULL,
+    last_match_summary JSONB DEFAULT NULL,
+    started_at TIMESTAMPTZ,
+    paused_at TIMESTAMPTZ,
+    duration_seconds INT DEFAULT 420 NOT NULL,
+    elapsed_seconds INT DEFAULT 0 NOT NULL,
+    payload JSONB DEFAULT '{}'::jsonb NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT now() NOT NULL
 );
+
+-- Migração segura para colunas operacionais de partida_ao_vivo
+ALTER TABLE public.partida_ao_vivo ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'ready';
+ALTER TABLE public.partida_ao_vivo ADD COLUMN IF NOT EXISTS order_num INT DEFAULT 1;
+ALTER TABLE public.partida_ao_vivo ADD COLUMN IF NOT EXISTS home_team_id TEXT DEFAULT 'time_1';
+ALTER TABLE public.partida_ao_vivo ADD COLUMN IF NOT EXISTS away_team_id TEXT DEFAULT 'time_2';
+ALTER TABLE public.partida_ao_vivo ADD COLUMN IF NOT EXISTS winner_team_id TEXT;
+ALTER TABLE public.partida_ao_vivo ADD COLUMN IF NOT EXISTS winner_team_name TEXT;
+ALTER TABLE public.partida_ao_vivo ADD COLUMN IF NOT EXISTS loser_team_id TEXT;
+ALTER TABLE public.partida_ao_vivo ADD COLUMN IF NOT EXISTS is_tie BOOLEAN DEFAULT false;
+ALTER TABLE public.partida_ao_vivo ADD COLUMN IF NOT EXISTS waiting_next_opponent BOOLEAN DEFAULT false;
+ALTER TABLE public.partida_ao_vivo ADD COLUMN IF NOT EXISTS waiting_tie_next_match BOOLEAN DEFAULT false;
+ALTER TABLE public.partida_ao_vivo ADD COLUMN IF NOT EXISTS tie_next_match JSONB DEFAULT NULL;
+ALTER TABLE public.partida_ao_vivo ADD COLUMN IF NOT EXISTS last_match_summary JSONB DEFAULT NULL;
+ALTER TABLE public.partida_ao_vivo ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ;
+ALTER TABLE public.partida_ao_vivo ADD COLUMN IF NOT EXISTS paused_at TIMESTAMPTZ;
+ALTER TABLE public.partida_ao_vivo ADD COLUMN IF NOT EXISTS duration_seconds INT DEFAULT 420;
+ALTER TABLE public.partida_ao_vivo ADD COLUMN IF NOT EXISTS elapsed_seconds INT DEFAULT 0;
+ALTER TABLE public.partida_ao_vivo ADD COLUMN IF NOT EXISTS remaining_at_start INT;
+ALTER TABLE public.partida_ao_vivo ADD COLUMN IF NOT EXISTS payload JSONB DEFAULT '{}'::jsonb;
 
 -- ==============================================================================
 -- 11. TABELA: gols (Registro individual de cada gol)
@@ -389,6 +438,9 @@ ALTER PUBLICATION supabase_realtime ADD TABLE public.partidas;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.gols;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.capas;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.rodadas;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.times;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.time_jogadores;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.rodada_jogadores;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.jogadores;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.futebois;
 

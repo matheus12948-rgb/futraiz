@@ -20,6 +20,13 @@ export const Sorteio = {
     this.bindEvents();
     this.applyTeamColorsToDOM();
     this.render();
+
+    Storage.onChange((type) => {
+      if (['currentRound', 'teams', 'selectedPlayers', 'newRound', 'players'].includes(type)) {
+        this.restoreSelection();
+        this.render();
+      }
+    });
   },
 
   restoreSelection() {
@@ -383,7 +390,7 @@ export const Sorteio = {
       isPerfect: diff === 0
     };
 
-    const roundId = Utils.generateId('rodada');
+    const roundId = Utils.generateUUID();
     const roundRecord = {
       id: roundId,
       date: Utils.formatDate(new Date()),

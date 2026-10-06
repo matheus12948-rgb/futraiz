@@ -1,9 +1,7 @@
 /**
  * Módulo de Partidas - Familia do Fut
- * 
- * MODELO: "QUEM GANHA FICA" (Winner Stays On)
- * 
- * Regras:
+ * * MODELO: "QUEM GANHA FICA" (Winner Stays On)
+ * * Regras:
  * 1. A primeira partida é obrigatoriamente TIME 1 x TIME 2.
  * 2. O time vencedor permanece em campo.
  * 3. O time perdedor sai da partida atual (mas continua disponível no campeonato e pode ser escolhido novamente depois).
@@ -80,69 +78,93 @@ export const Partidas = {
     });
   },
 
+  calculateCurrentRemainingSeconds(state = this.state) {
+    if (!state) return 0;
+    const totalSecs = state.durationSeconds || (state.durationMinutes ? state.durationMinutes * 60 : 420);
+
+    if (state.status === 'ready') {
+      return totalSecs;
+    }
+    if (state.status === 'finished') {
+      return 0;
+    }
+    if (state.status === 'paused') {
+      return state.remainingSeconds !== undefined ? Math.max(0, state.remainingSeconds) : totalSecs;
+    }
+    if (state.status === 'running') {
+      if (state.startedAt) {
+        const startedTime = new Date(state.startedAt).getTime();
+        const now = Date.now();
+        const elapsedSinceStart = Math.max(0, Math.floor((now - startedTime) / 1000));
+        const baseRemaining = state.remainingAtStart !== undefined          ? state.remainingAtStart          : (state.remainingSeconds !== undefined ? state.remainingSeconds : totalSecs);
+        return Math.max(0, baseRemaining - elapsedSinceStart);
+      }
+      return state.remainingSeconds !== undefined ? Math.max(0, state.remainingSeconds) : totalSecs;
+    }
+    return totalSecs;
+  },
+
   handleLiveUpdate(liveData) {
     if (!liveData) return;
 
-    this.state.order = liveData.order !== undefined ? liveData.order : this.state.order;
-    this.state.homeTeamId = liveData.homeTeamId || this.state.homeTeamId;
-    this.state.awayTeamId = liveData.awayTeamId || this.state.awayTeamId;
-    this.state.homeTeamName = liveData.homeTeamName || this.state.homeTeamName;
-    this.state.awayTeamName = liveData.awayTeamName || this.state.awayTeamName;
-    this.state.homeScore = liveData.placar_casa !== undefined ? liveData.placar_casa : (liveData.homeScore !== undefined ? liveData.homeScore : this.state.homeScore);
-    this.state.awayScore = liveData.placar_fora !== undefined ? liveData.placar_fora : (liveData.awayScore !== undefined ? liveData.awayScore : this.state.awayScore);
-    this.state.goals = Array.isArray(liveData.gols) ? liveData.gols : (liveData.goals || []);
-    
-    const newStatus = liveData.status || (liveData.is_active ? (liveData.is_paused ? 'paused' : 'running') : (liveData.isActive ? (liveData.isPaused ? 'paused' : 'running') : 'ready'));
+    const data = liveData.payload && typeof liveData.payload === 'object'
+      ? { ...liveData.payload, ...liveData }
+      : liveData;
+
+    this.state.order = data.order !== undefined ? data.order : (data.order_num !== undefined ? data.order_num : this.state.order);
+    this.state.homeTeamId = data.homeTeamId || data.home_team_id || this.state.homeTeamId;
+    this.state.awayTeamId = data.awayTeamId || data.away_team_id || this.state.awayTeamId;
+    this.state.homeTeamName = data.homeTeamName || data.time_casa_nome || this.state.homeTeamName;
+    this.state.awayTeamName = data.awayTeamName || data.time_fora_nome || this.state.awayTeamName;
+    this.state.homeScore = data.homeScore !== undefined ? data.homeScore : (data.placar_casa !== undefined ? data.placar_casa : this.state.homeScore);
+    this.state.awayScore = data.awayScore !== undefined ? data.awayScore : (data.placar_fora !== undefined ? data.placar_fora : this.state.awayScore);
+    this.state.goals = Array.isArray(data.goals) ? data.goals : (Array.isArray(data.gols) ? data.gols : []);
+
+    const newStatus = data.status || (data.is_active ? (data.is_paused ? 'paused' : 'running') : (data.isActive ? (data.isPaused ? 'paused' : 'running') : 'ready'));
     this.state.status = newStatus;
     this.state.isActive = newStatus === 'running' || newStatus === 'paused';
     this.state.isPaused = newStatus === 'paused';
 
-    this.state.winnerTeamId = liveData.winnerTeamId !== undefined ? liveData.winnerTeamId : this.state.winnerTeamId;
-    this.state.winnerTeamName = liveData.winnerTeamName !== undefined ? liveData.winnerTeamName : this.state.winnerTeamName;
-    this.state.isTie = Boolean(liveData.isTie);
-    this.state.tiePendingResolution = Boolean(liveData.tiePendingResolution);
-    this.state.waitingNextOpponent = Boolean(liveData.waitingNextOpponent);
-    this.state.decisaoAdmin = Boolean(liveData.decisaoAdmin);
-    this.state.lastMatchSummary = liveData.lastMatchSummary || this.state.lastMatchSummary;
+    this.state.winnerTeamId = data.winnerTeamId !== undefined ? data.winnerTeamId : (data.winner_team_id !== undefined ? data.winner_team_id : null);
+    this.state.winnerTeamName = data.winnerTeamName || data.winner_team_name || null;
+    this.state.loserTeamId = data.loserTeamId !== undefined ? data.loserTeamId : (data.loser_team_id !== undefined ? data.loser_team_id : null);
+    this.state.isTie = Boolean(data.isTie !== undefined ? data.isTie : data.is_tie);
+    this.state.tiePendingResolution = Boolean(data.tiePendingResolution);
+    this.state.waitingNextOpponent = Boolean(data.waitingNextOpponent !== undefined ? data.waitingNextOpponent : data.waiting_next_opponent);
+    this.state.waitingTieNextMatch = Boolean(data.waitingTieNextMatch !== undefined ? data.waitingTieNextMatch : data.waiting_tie_next_match);
+    this.state.tieNextMatch = data.tieNextMatch || data.tie_next_match || null;
+    this.state.decisaoAdmin = Boolean(data.decisaoAdmin);
+    this.state.lastMatchSummary = data.lastMatchSummary || data.last_match_summary || null;
 
-    if (liveData.duration_seconds) {
-      this.state.durationSeconds = liveData.duration_seconds;
-      this.state.durationMinutes = Math.floor(liveData.duration_seconds / 60);
+    if (data.duration_seconds || data.durationSeconds) {
+      this.state.durationSeconds = data.durationSeconds || data.duration_seconds;
+      this.state.durationMinutes = Math.floor(this.state.durationSeconds / 60);
     }
+    this.state.startedAt = data.startedAt || data.started_at || null;
+    this.state.pausedAt = data.pausedAt || data.paused_at || null;
+    this.state.remainingAtStart = data.remainingAtStart !== undefined      ? data.remainingAtStart      : (data.remaining_at_start !== undefined ? data.remaining_at_start : (data.remainingSeconds !== undefined ? data.remainingSeconds : (data.tempo_restante !== undefined ? data.tempo_restante : this.state.durationSeconds)));
 
-    if (Storage.isPublicViewer()) {
-      let remaining = liveData.tempo_restante !== undefined ? liveData.tempo_restante : (liveData.remainingSeconds !== undefined ? liveData.remainingSeconds : this.state.remainingSeconds);
-
-      if (newStatus === 'running' && liveData.updated_at) {
-        const elapsedSinceUpdate = Math.max(0, Math.floor((Date.now() - new Date(liveData.updated_at).getTime()) / 1000));
-        remaining = Math.max(0, remaining - elapsedSinceUpdate);
-        this.state.remainingSeconds = remaining;
-        this.startPublicTicker();
-      } else {
-        if (this.publicTickerInterval) clearInterval(this.publicTickerInterval);
-        this.state.remainingSeconds = remaining;
+    if (newStatus === 'running') {
+      this.state.remainingSeconds = this.calculateCurrentRemainingSeconds();
+      this.startTimerLoop();
+    } else {
+      if (this.timerInterval) {
+        clearInterval(this.timerInterval);
+        this.timerInterval = null;
       }
+      if (this.publicTickerInterval) {
+        clearInterval(this.publicTickerInterval);
+        this.publicTickerInterval = null;
+      }
+      this.state.remainingSeconds = data.remainingSeconds !== undefined        ? data.remainingSeconds        : (data.tempo_restante !== undefined ? data.tempo_restante : this.state.durationSeconds);
+      this.updateTimerDisplay();
     }
 
     this.render();
   },
 
   startPublicTicker() {
-    if (this.publicTickerInterval) clearInterval(this.publicTickerInterval);
-    this.publicTickerInterval = setInterval(() => {
-      if (this.state.status !== 'running') {
-        clearInterval(this.publicTickerInterval);
-        return;
-      }
-      if (this.state.remainingSeconds > 0) {
-        this.state.remainingSeconds--;
-        this.updateTimerDisplay();
-      } else {
-        clearInterval(this.publicTickerInterval);
-        this.state.status = 'finished';
-        this.render();
-      }
-    }, 1000);
+    this.startTimerLoop();
   },
 
   restoreOrInitMatch() {
@@ -398,6 +420,10 @@ export const Partidas = {
   // --------------------------------------------------------------------------
   // CONTROLE DO CRONÔMETRO E PARTIDA
   // --------------------------------------------------------------------------
+  iniciarPartida() {
+    return this.startOrResumeMatch();
+  },
+
   startOrResumeMatch() {
     Storage.assertAdmin('Iniciar partida');
     const teams = Storage.getTeams();
@@ -438,11 +464,18 @@ export const Partidas = {
       return;
     }
 
+    if (this.state.status === 'paused') {
+      this.resumeMatch();
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
     this.state.status = 'running';
     this.state.isActive = true;
     this.state.isPaused = false;
-    this.state.startedAt = this.state.startedAt || new Date().toISOString();
+    this.state.startedAt = nowIso;
     this.state.pausedAt = null;
+    this.state.remainingAtStart = this.state.remainingSeconds !== undefined ? this.state.remainingSeconds : this.state.durationSeconds;
     this.state.lastTick = Date.now();
 
     this.startTimerLoop();
@@ -451,6 +484,26 @@ export const Partidas = {
 
     Utils.sound.playWhistle();
     Utils.toast(`Partida ${String(this.state.order).padStart(2, '0')} iniciada!`, 'success', 2000);
+  },
+
+  resumeMatch() {
+    Storage.assertAdmin('Retomar partida');
+    if (this.state.status !== 'paused') return;
+
+    const nowIso = new Date().toISOString();
+    this.state.status = 'running';
+    this.state.isActive = true;
+    this.state.isPaused = false;
+    this.state.startedAt = nowIso;
+    this.state.pausedAt = null;
+    this.state.remainingAtStart = this.state.remainingSeconds;
+    this.state.lastTick = Date.now();
+
+    this.startTimerLoop();
+    this.render();
+    this.saveFullState();
+
+    Utils.toast('Partida retomada.', 'info', 1500);
   },
 
   pauseMatch() {
@@ -462,9 +515,12 @@ export const Partidas = {
       this.timerInterval = null;
     }
 
+    const currentRemaining = this.calculateCurrentRemainingSeconds();
     this.state.status = 'paused';
     this.state.isActive = true;
     this.state.isPaused = true;
+    this.state.remainingSeconds = currentRemaining;
+    this.state.remainingAtStart = currentRemaining;
     this.state.pausedAt = new Date().toISOString();
 
     this.render();
@@ -498,29 +554,29 @@ export const Partidas = {
     this.timerInterval = setInterval(() => {
       if (this.state.status !== 'running') {
         clearInterval(this.timerInterval);
+        this.timerInterval = null;
         return;
       }
 
-      const now = Date.now();
-      const elapsedSeconds = Math.floor((now - this.state.lastTick) / 1000);
+      const currentRemaining = this.calculateCurrentRemainingSeconds();
+      this.state.remainingSeconds = currentRemaining;
+      this.state.lastTick = Date.now();
+      this.updateTimerDisplay();
 
-      if (elapsedSeconds >= 1) {
-        this.state.remainingSeconds = Math.max(0, this.state.remainingSeconds - elapsedSeconds);
-        this.state.lastTick = now;
+      if (currentRemaining <= 0) {
+        clearInterval(this.timerInterval);
+        this.timerInterval = null;
+        this.state.status = 'finished';
         this.updateTimerDisplay();
-        this.saveLocalStateOnly();
-
-        if (this.state.remainingSeconds <= 0) {
-          clearInterval(this.timerInterval);
-          Utils.sound.playWhistle();
-          Utils.toast('Tempo regulamentar esgotado! Finalize a partida.', 'warning', 5000);
-          this.solicitarFinalizacao(true);
-        }
+        Utils.sound.playWhistle();
+        Utils.toast('Tempo regulamentar esgotado! Finalize a partida.', 'warning', 5000);
+        this.solicitarFinalizacao(true);
       }
     }, 500);
   },
 
   updateTimerDisplay() {
+    if (typeof document === 'undefined') return;
     const timerEl = document.getElementById('scoreboard-timer');
     if (timerEl) {
       timerEl.textContent = Utils.formatSeconds(this.state.remainingSeconds);
@@ -664,7 +720,7 @@ export const Partidas = {
     const minuteFormatted = Utils.formatSeconds(elapsedSecs);
 
     const goal = {
-      id: Utils.generateId('goal'),
+      id: Utils.generateUUID(),
       playerId: playerId,
       playerName: playerName,
       teamId: teamId,
@@ -768,8 +824,8 @@ export const Partidas = {
     const elapsedSeconds = (this.state.durationMinutes * 60) - this.state.remainingSeconds;
 
     const matchRecord = {
-      id: Utils.generateId('match'),
-      roundId: round ? round.id : null,
+      id: Utils.generateUUID(),
+      roundId: round && Utils.isUUID(round.id) ? round.id : null,
       matchOrder: this.state.order,
       date: round ? round.date : Utils.formatDate(new Date()),
       time: Utils.formatTime(new Date()),
@@ -1226,6 +1282,7 @@ export const Partidas = {
       durationMinutes: this.state.durationMinutes,
       durationSeconds: this.state.durationSeconds || (this.state.durationMinutes * 60),
       remainingSeconds: this.state.remainingSeconds,
+      remainingAtStart: this.state.remainingAtStart !== undefined ? this.state.remainingAtStart : this.state.remainingSeconds,
       startedAt: this.state.startedAt,
       pausedAt: this.state.pausedAt,
       lastTick: this.state.lastTick,
@@ -1242,6 +1299,8 @@ export const Partidas = {
       isTie: this.state.isTie,
       tiePendingResolution: this.state.tiePendingResolution,
       waitingNextOpponent: this.state.waitingNextOpponent,
+      waitingTieNextMatch: this.state.waitingTieNextMatch,
+      tieNextMatch: this.state.tieNextMatch,
       decisaoAdmin: this.state.decisaoAdmin,
       lastMatchSummary: this.state.lastMatchSummary
     };
@@ -1251,6 +1310,7 @@ export const Partidas = {
   // RENDERIZAÇÃO DA INTERFACE DA PARTIDA
   // --------------------------------------------------------------------------
   render() {
+    if (typeof document === 'undefined') return;
     const teams = Storage.getTeams();
     const emptyStateEl = document.getElementById('partida-empty-state');
     const activeStateEl = document.getElementById('partida-active-state');
@@ -1746,9 +1806,7 @@ export const Partidas = {
           <div>
             <h4 style="font-size: 1.05rem; font-weight: 700; margin-bottom: 0.25rem;">Encerramento da Noite</h4>
             <p class="text-muted" style="font-size: 0.85rem; margin: 0;">
-              ${matches.length === 0 
-                ? 'Realize a primeira partida para liberar o encerramento.' 
-                : `${matches.length} partida(s) finalizada(s). Quando desejar, encerre a noite para definir o campeão e distribuir as Capas.`}
+              ${matches.length === 0                ? 'Realize a primeira partida para liberar o encerramento.'                : `${matches.length} partida(s) finalizada(s). Quando desejar, encerre a noite para definir o campeão e distribuir as Capas.`}
             </p>
           </div>
 

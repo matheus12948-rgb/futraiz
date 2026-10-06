@@ -66,6 +66,32 @@ export const App = {
       this.refreshAll();
     });
 
+    // Sincronização multi-dispositivo por eventos do ciclo de vida da janela/aba
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && Storage.currentFutebol) {
+          console.log('[App] Aba visível: reconciliando estado oficial com Supabase...');
+          Storage.reconcileActiveState(Storage.currentFutebol.id).catch(() => {});
+        }
+      });
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', () => {
+        if (Storage.currentFutebol) {
+          console.log('[App] Conexão restabelecida: reconectando Realtime e reconciliando estado...');
+          Storage.setupRealtime(Storage.currentFutebol.id);
+          Storage.reconcileActiveState(Storage.currentFutebol.id).catch(() => {});
+        }
+      });
+
+      window.addEventListener('focus', () => {
+        if (Storage.currentFutebol) {
+          Storage.reconcileActiveState(Storage.currentFutebol.id).catch(() => {});
+        }
+      });
+    }
+
     // Roteamento por URL / Hash
     window.addEventListener('hashchange', () => this.handleHashRoute());
     await this.handleHashRoute();
@@ -586,11 +612,27 @@ export const App = {
           Storage.syncPlayersFromSupabase(Storage.currentFutebol.id).catch(() => {});
         }
       }
-      else if (screenId === 'sorteio') Sorteio.render();
-      else if (screenId === 'partida') Partidas.render();
-      else if (screenId === 'tabela') Tabela.render();
-      else if (screenId === 'rankings') Rankings.render();
-      else if (screenId === 'historico') Historico.render();
+      else if (screenId === 'sorteio') {
+        Sorteio.render();
+        if (Storage.currentFutebol) Storage.reconcileActiveState(Storage.currentFutebol.id).catch(() => {});
+      }
+      else if (screenId === 'partida') {
+        Partidas.restoreOrInitMatch();
+        Partidas.render();
+        if (Storage.currentFutebol) Storage.reconcileActiveState(Storage.currentFutebol.id).catch(() => {});
+      }
+      else if (screenId === 'tabela') {
+        Tabela.render();
+        if (Storage.currentFutebol) Storage.reconcileActiveState(Storage.currentFutebol.id).catch(() => {});
+      }
+      else if (screenId === 'rankings') {
+        Rankings.render();
+        if (Storage.currentFutebol) Storage.reconcileActiveState(Storage.currentFutebol.id).catch(() => {});
+      }
+      else if (screenId === 'historico') {
+        Historico.render();
+        if (Storage.currentFutebol) Storage.reconcileActiveState(Storage.currentFutebol.id).catch(() => {});
+      }
       else if (screenId === 'configuracoes') Configuracoes.render();
     } catch (err) {
       console.error(`[App] Erro ao renderizar tela ${screenId}:`, err);

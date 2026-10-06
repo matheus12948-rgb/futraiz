@@ -314,7 +314,13 @@ class LocalSupabaseEngine {
                 }
               }
 
-              const existingIdx = (self.tables[tableName] || []).findIndex(r => r.id === row.id);
+              const existingIdx = (self.tables[tableName] || []).findIndex(r =>
+                r.id === row.id ||
+                (tableName === 'partida_ao_vivo' && r.futebol_id === row.futebol_id) ||
+                (tableName === 'rodada_jogadores' && r.rodada_id === row.rodada_id && r.jogador_id === row.jogador_id) ||
+                (tableName === 'time_jogadores' && r.time_id === row.time_id && r.jogador_id === row.jogador_id) ||
+                (tableName === 'capas' && r.rodada_id === row.rodada_id && r.jogador_id === row.jogador_id)
+              );
 
               if (tableName === 'jogadores') {
                 const fut = (self.tables.futebois || []).find(f => f.id === row.futebol_id);
@@ -346,16 +352,17 @@ class LocalSupabaseEngine {
               }
 
               if (existingIdx >= 0) {
-                self.tables[tableName][existingIdx] = { ...self.tables[tableName][existingIdx], ...row };
+                const merged = { ...self.tables[tableName][existingIdx], ...row, updated_at: new Date().toISOString() };
+                self.tables[tableName][existingIdx] = merged;
+                self._save();
+                self._broadcast(tableName, 'UPDATE', merged);
               } else {
                 self.tables[tableName].push(row);
+                self._save();
+                self._broadcast(tableName, 'INSERT', row);
               }
             }
-            self._save();
 
-            for (const row of rowsArr) {
-              self._broadcast(tableName, 'INSERT', row);
-            }
             return resolve({ data: this._single ? rowsArr[0] : rowsArr, error: null });
           }
 
