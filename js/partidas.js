@@ -125,13 +125,36 @@ export const Partidas = {
     this.state.isActive = newStatus === 'running' || newStatus === 'paused';
     this.state.isPaused = newStatus === 'paused';
 
-    this.state.winnerTeamId = data.winnerTeamId !== undefined ? data.winnerTeamId : (data.winner_team_id !== undefined ? data.winner_team_id : null);
-    this.state.winnerTeamName = data.winnerTeamName || data.winner_team_name || null;
-    this.state.loserTeamId = data.loserTeamId !== undefined ? data.loserTeamId : (data.loser_team_id !== undefined ? data.loser_team_id : null);
+    const incomingWinnerId = data.winnerTeamId || data.winner_team_id || null;
+    const incomingWinnerName = data.winnerTeamName || data.winner_team_name || null;
+    const incomingLoserId = data.loserTeamId || data.loser_team_id || null;
+    const incomingWaitingNext = Boolean(data.waitingNextOpponent !== undefined ? data.waitingNextOpponent : data.waiting_next_opponent);
+    const incomingWaitingTie = Boolean(data.waitingTieNextMatch !== undefined ? data.waitingTieNextMatch : data.waiting_tie_next_match);
+
+    if (incomingWinnerId) {
+      this.state.winnerTeamId = incomingWinnerId;
+      this.state.winner_team_id = incomingWinnerId;
+      this.state.winnerTeamName = incomingWinnerName;
+      this.state.winner_team_name = incomingWinnerName;
+      this.state.loserTeamId = incomingLoserId;
+      this.state.loser_team_id = incomingLoserId;
+    } else if (incomingWaitingNext && this.state.winnerTeamId) {
+      // Preserva o vencedor atual para não permitir que evento limpe com null/undefined
+    } else if (newStatus !== 'finished') {
+      this.state.winnerTeamId = null;
+      this.state.winner_team_id = null;
+      this.state.winnerTeamName = null;
+      this.state.winner_team_name = null;
+      this.state.loserTeamId = null;
+      this.state.loser_team_id = null;
+    }
+
     this.state.isTie = Boolean(data.isTie !== undefined ? data.isTie : data.is_tie);
     this.state.tiePendingResolution = Boolean(data.tiePendingResolution);
-    this.state.waitingNextOpponent = Boolean(data.waitingNextOpponent !== undefined ? data.waitingNextOpponent : data.waiting_next_opponent);
-    this.state.waitingTieNextMatch = Boolean(data.waitingTieNextMatch !== undefined ? data.waitingTieNextMatch : data.waiting_tie_next_match);
+    this.state.waitingNextOpponent = incomingWaitingNext;
+    this.state.waiting_next_opponent = incomingWaitingNext;
+    this.state.waitingTieNextMatch = incomingWaitingTie;
+    this.state.waiting_tie_next_match = incomingWaitingTie;
     this.state.tieNextMatch = data.tieNextMatch || data.tie_next_match || null;
     this.state.decisaoAdmin = Boolean(data.decisaoAdmin);
     this.state.lastMatchSummary = data.lastMatchSummary || data.last_match_summary || null;
@@ -173,7 +196,14 @@ export const Partidas = {
     const roundKey = round ? round.dateKey : Utils.getDateKey(new Date());
     const matches = Storage.getMatches().filter(m => (round && m.roundId === round.id) || m.dateKey === roundKey);
 
-    if (saved && (saved.status === 'running' || saved.status === 'paused' || saved.waitingNextOpponent || saved.waitingTieNextMatch || (saved.goals && saved.goals.length > 0))) {
+    if (saved && (saved.status === 'running' || saved.status === 'paused' || saved.waitingNextOpponent || saved.waiting_next_opponent || saved.waitingTieNextMatch || saved.waiting_tie_next_match || (saved.goals && saved.goals.length > 0))) {
+      const winnerId = saved.winnerTeamId || saved.winner_team_id || (saved.waitingNextOpponent && matches.length > 0 ? matches[0].winner : null);
+      const teams = Storage.getTeams() || {};
+      const winnerName = saved.winnerTeamName || saved.winner_team_name || (winnerId && teams[winnerId] ? teams[winnerId].name : null);
+      const loserId = saved.loserTeamId || saved.loser_team_id || (saved.waitingNextOpponent && matches.length > 0 ? matches[0].loser : null);
+      const isWaitingOpponent = Boolean(saved.waitingNextOpponent !== undefined ? saved.waitingNextOpponent : saved.waiting_next_opponent);
+      const isWaitingTie = Boolean(saved.waitingTieNextMatch !== undefined ? saved.waitingTieNextMatch : saved.waiting_tie_next_match);
+
       this.state = {
         ...this.state,
         ...saved,
@@ -181,11 +211,36 @@ export const Partidas = {
         status: saved.status || (saved.isActive ? (saved.isPaused ? 'paused' : 'running') : 'ready'),
         isActive: Boolean(saved.isActive),
         isPaused: Boolean(saved.isPaused),
+        winnerTeamId: winnerId,
+        winner_team_id: winnerId,
+        winnerTeamName: winnerName,
+        winner_team_name: winnerName,
+        loserTeamId: loserId,
+        loser_team_id: loserId,
+        waitingNextOpponent: isWaitingOpponent,
+        waiting_next_opponent: isWaitingOpponent,
+        waitingTieNextMatch: isWaitingTie,
+        waiting_tie_next_match: isWaitingTie,
+        outsideWaitingTeamIds: saved.outsideWaitingTeamIds || Object.keys(teams).filter(id => id !== saved.homeTeamId && id !== saved.awayTeamId),
         durationMinutes: saved.durationMinutes || (Storage.getDefaultMatchDurationMinutes() || 7),
         durationSeconds: saved.durationSeconds || ((saved.durationMinutes || (Storage.getDefaultMatchDurationMinutes() || 7)) * 60),
         remainingSeconds: saved.remainingSeconds !== undefined ? saved.remainingSeconds : ((saved.durationMinutes || (Storage.getDefaultMatchDurationMinutes() || 7)) * 60),
         goals: saved.goals || []
       };
+
+      // Se waitingNextOpponent estiver ativo mas winnerTeamId estiver vazio por qualquer motivo,
+      // recupera o vencedor da última partida persistida no histórico
+      if (this.state.waitingNextOpponent && !this.state.winnerTeamId && matches.length > 0 && matches[0].winner) {
+        const lastWinner = matches[0].winner;
+        this.state.winnerTeamId = lastWinner;
+        this.state.winner_team_id = lastWinner;
+        this.state.winnerTeamName = (teams[lastWinner] && teams[lastWinner].name) || lastWinner;
+        this.state.winner_team_name = this.state.winnerTeamName;
+        if (matches[0].loser) {
+          this.state.loserTeamId = matches[0].loser;
+          this.state.loser_team_id = matches[0].loser;
+        }
+      }
 
       // Recalcula tempo caso estivesse em andamento
       if (this.state.status === 'running' && !this.state.isPaused && this.state.lastTick) {
@@ -260,11 +315,16 @@ export const Partidas = {
           awayScore: lastMatch.awayScore,
           goals: lastMatch.goals || [],
           winnerTeamId: winnerId,
+          winner_team_id: winnerId,
           winnerTeamName: winnerTeam.name,
+          winner_team_name: winnerTeam.name,
           loserTeamId: lastMatch.loser,
+          loser_team_id: lastMatch.loser,
           isTie: Boolean(lastMatch.isTie),
           tiePendingResolution: false,
           waitingNextOpponent: true,
+          waiting_next_opponent: true,
+          outsideWaitingTeamIds: Object.keys(teams).filter(id => id !== lastMatch.homeTeamId && id !== lastMatch.awayTeamId),
           decisaoAdmin: Boolean(lastMatch.decisaoAdmin),
           lastMatchSummary: {
             order: matches.length,
@@ -272,7 +332,9 @@ export const Partidas = {
             awayTeamName: lastMatch.awayTeamName,
             homeScore: lastMatch.homeScore,
             awayScore: lastMatch.awayScore,
-            resultText: lastMatch.resultText
+            resultText: lastMatch.resultText,
+            winnerTeamId: winnerId,
+            winnerTeamName: winnerTeam.name
           }
         };
       } else {
@@ -619,6 +681,10 @@ export const Partidas = {
       document.body.appendChild(modal);
     }
 
+    // Trava de processamento para prevenir duplo clique ou requisições simultâneas
+    let isProcessingGoal = false;
+    let selectedPlayer = null;
+
     // Renderiza a estrutura padronizada e robusta com .modal-card centralizado
     modal.innerHTML = `
       <div class="modal-backdrop"></div>
@@ -647,20 +713,41 @@ export const Partidas = {
       </div>
     `;
 
-    // Fechamento pelo X ou clique no backdrop
-    const closeBtns = modal.querySelectorAll('[data-close]');
-    closeBtns.forEach(b => b.onclick = () => Utils.closeModal(modalId));
-    const backdrop = modal.querySelector('.modal-backdrop');
-    if (backdrop) backdrop.onclick = () => Utils.closeModal(modalId);
-
-    let selectedPlayer = null;
     const btnConfirm = modal.querySelector('#btn-confirm-goal');
     const btnCancel = modal.querySelector('#btn-cancel-goal');
 
-    btnConfirm.disabled = true;
-    btnCancel.onclick = () => Utils.closeModal(modalId);
+    const fecharModalGol = () => {
+      selectedPlayer = null;
+      if (modal) {
+        modal.classList.remove('active');
+        if (typeof modal.setAttribute === 'function') {
+          modal.setAttribute('aria-hidden', 'true');
+        }
+        modal.style.display = 'none';
+      }
+      Utils.closeModal(modalId);
+    };
 
-    // Renderiza ESTRITAMENTE os 5 jogadores da equipe informada
+    // Fechamento pelo X ou clique no backdrop com proteção se estiver processando
+    const closeBtns = modal.querySelectorAll('[data-close]');
+    closeBtns.forEach(b => b.onclick = () => {
+      if (isProcessingGoal) return;
+      fecharModalGol();
+    });
+    const backdrop = modal.querySelector('.modal-backdrop');
+    if (backdrop) backdrop.onclick = () => {
+      if (isProcessingGoal) return;
+      fecharModalGol();
+    };
+
+    btnConfirm.disabled = true;
+    btnConfirm.textContent = 'CONFIRMAR GOL';
+    btnCancel.onclick = () => {
+      if (isProcessingGoal) return;
+      fecharModalGol();
+    };
+
+    // Renderiza ESTRITAMENTE os jogadores da equipe informada
     const listEl = modal.querySelector('#modal-goal-players-list');
     listEl.innerHTML = `
       <div class="player-selection-list">
@@ -680,6 +767,7 @@ export const Partidas = {
     const playerBtns = listEl.querySelectorAll('.btn-select-player');
     playerBtns.forEach(btn => {
       btn.onclick = () => {
+        if (isProcessingGoal) return;
         playerBtns.forEach(b => {
           b.classList.remove('selected');
           const radio = b.querySelector('.p-select-radio');
@@ -698,29 +786,79 @@ export const Partidas = {
       };
     });
 
-    btnConfirm.onclick = () => {
+    btnConfirm.onclick = async () => {
+      // 1. Validar se um jogador foi selecionado
       if (!selectedPlayer) {
         Utils.toast('Selecione o jogador autor do gol.', 'warning');
         return;
       }
-      this.registrarGol(teamId, selectedPlayer.id, selectedPlayer.name);
-      Utils.closeModal(modalId);
+
+      // 2. Trava contra duplo clique / confirmações simultâneas
+      if (isProcessingGoal) {
+        return;
+      }
+      isProcessingGoal = true;
+
+      // 3. Desabilitar visualmente o botão e alterar texto temporário
+      btnConfirm.disabled = true;
+      btnConfirm.textContent = 'Registrando...';
+      if (btnCancel) btnCancel.disabled = true;
+
+      try {
+        // 4. Executar persistência e processamento com chave de idempotência
+        const goalId = Utils.generateUUID();
+        await this.registrarGol(teamId, selectedPlayer.id, selectedPlayer.name, goalId);
+
+        // 5. Somente após processamento bem-sucedido: fechar modal e limpar seleção
+        fecharModalGol();
+      } catch (error) {
+        console.error('[Partidas] Erro ao registrar gol:', error);
+        Utils.toast(error?.message || 'Erro ao registrar gol no Supabase. Tente novamente.', 'error');
+        // Em caso de erro, NÃO fecha o modal
+      } finally {
+        isProcessingGoal = false;
+        if (btnCancel) btnCancel.disabled = false;
+
+        const isStillOpen = modal.classList.contains('active') || modal.style.display !== 'none';
+        if (isStillOpen) {
+          // Permite tentar novamente com o mesmo jogador selecionado
+          btnConfirm.disabled = !selectedPlayer;
+          btnConfirm.textContent = 'CONFIRMAR GOL';
+        } else {
+          // Modal fechado com sucesso: restaura botão para a próxima abertura
+          btnConfirm.disabled = true;
+          btnConfirm.textContent = 'CONFIRMAR GOL';
+        }
+      }
     };
 
+    modal.style.display = '';
     Utils.openModal(modalId);
   },
 
-  registrarGol(teamId, playerId, playerName) {
+  async registrarGol(teamId, playerId, playerName, customGoalId = null) {
     Storage.assertAdmin('Registrar gol');
     const teams = Storage.getTeams();
-    const team = teams[teamId];
+    const team = teams ? teams[teamId] : null;
     const teamName = team ? team.name : teamId;
+
+    if (teamId !== this.state.homeTeamId && teamId !== this.state.awayTeamId) {
+      throw new Error('Somente jogadores dos dois times em campo podem marcar gols.');
+    }
+
+    const goalId = customGoalId || Utils.generateUUID();
+
+    // Idempotência: impede registrar o mesmo gol duas vezes
+    if (this.state.goals.some(g => g.id === goalId)) {
+      console.warn('[Partidas] Gol já registrado anteriormente (idempotente):', goalId);
+      return;
+    }
 
     const elapsedSecs = Math.max(0, (this.state.durationMinutes * 60) - this.state.remainingSeconds);
     const minuteFormatted = Utils.formatSeconds(elapsedSecs);
 
     const goal = {
-      id: Utils.generateUUID(),
+      id: goalId,
       playerId: playerId,
       playerName: playerName,
       teamId: teamId,
@@ -738,7 +876,24 @@ export const Partidas = {
     this.state.goals.unshift(goal);
     this.renderScoreboard();
     this.renderGoalsList();
-    this.saveFullState();
+
+    try {
+      await this.saveFullState();
+    } catch (saveError) {
+      // Rollback local se a persistência falhar
+      const idx = this.state.goals.findIndex(g => g.id === goalId);
+      if (idx !== -1) {
+        this.state.goals.splice(idx, 1);
+      }
+      if (teamId === this.state.homeTeamId) {
+        this.state.homeScore = Math.max(0, this.state.homeScore - 1);
+      } else {
+        this.state.awayScore = Math.max(0, this.state.awayScore - 1);
+      }
+      this.renderScoreboard();
+      this.renderGoalsList();
+      throw saveError;
+    }
 
     Utils.sound.playGoal();
     Utils.toast(`Gol de ${playerName} (${teamName})!`, 'success', 3000);
@@ -851,9 +1006,6 @@ export const Partidas = {
       createdAt: new Date().toISOString()
     };
 
-    // Salva partida finalizada no histórico oficial (alimenta a Tabela)
-    Storage.addMatch(matchRecord);
-
     this.state.status = 'finished';
     this.state.isActive = false;
     this.state.isPaused = false;
@@ -864,7 +1016,9 @@ export const Partidas = {
       awayTeamName: matchRecord.awayTeamName,
       homeScore: matchRecord.homeScore,
       awayScore: matchRecord.awayScore,
-      resultText: resultText
+      resultText: resultText,
+      winnerTeamId: winner,
+      winnerTeamName: winner ? (winner === this.state.homeTeamId ? (homeTeam ? homeTeam.name : 'Time 1') : (awayTeam ? awayTeam.name : 'Time 2')) : null
     };
 
     Utils.sound.playWhistle();
@@ -885,11 +1039,16 @@ export const Partidas = {
       const nextAwayTeam = teams[nextAwayId] || { name: 'Time 4' };
 
       this.state.winnerTeamId = null;
+      this.state.winner_team_id = null;
       this.state.winnerTeamName = null;
+      this.state.winner_team_name = null;
       this.state.loserTeamId = null;
+      this.state.loser_team_id = null;
       this.state.tiePendingResolution = false;
       this.state.waitingNextOpponent = false;
+      this.state.waiting_next_opponent = false;
       this.state.waitingTieNextMatch = true;
+      this.state.waiting_tie_next_match = true;
       this.state.tieNextMatch = {
         homeTeamId: nextHomeId,
         awayTeamId: nextAwayId,
@@ -897,7 +1056,9 @@ export const Partidas = {
         awayTeamName: nextAwayTeam.name
       };
 
+      // Persiste estado oficial finalizado no Supabase e Storage antes de emitir matches
       this.saveFullState();
+      Storage.addMatch(matchRecord);
       this.render();
       Utils.toast(`Partida empatada! ${homeTeam ? homeTeam.name : 'Time 1'} e ${awayTeam ? awayTeam.name : 'Time 2'} saem. Próxima partida: ${nextHomeTeam.name} × ${nextAwayTeam.name}!`, 'info', 4500);
     } else {
@@ -905,16 +1066,23 @@ export const Partidas = {
       // O vencedor permanece em campo.
       // O perdedor sai de campo.
       // O administrador escolhe o próximo adversário entre os 2 times que estão fora.
-      const winnerName = winner === this.state.homeTeamId ? homeTeam.name : awayTeam.name;
+      const winnerName = winner === this.state.homeTeamId ? (homeTeam ? homeTeam.name : 'Time 1') : (awayTeam ? awayTeam.name : 'Time 2');
       this.state.winnerTeamId = winner;
+      this.state.winner_team_id = winner;
       this.state.winnerTeamName = winnerName;
+      this.state.winner_team_name = winnerName;
       this.state.loserTeamId = loser;
+      this.state.loser_team_id = loser;
       this.state.tiePendingResolution = false;
       this.state.waitingTieNextMatch = false;
+      this.state.waiting_tie_next_match = false;
       this.state.waitingNextOpponent = true;
+      this.state.waiting_next_opponent = true;
       this.state.outsideWaitingTeamIds = Object.keys(teams).filter(id => id !== this.state.homeTeamId && id !== this.state.awayTeamId);
 
+      // Persiste estado oficial finalizado no Supabase e Storage antes de emitir matches
       this.saveFullState();
+      Storage.addMatch(matchRecord);
       this.render();
       Utils.toast(`Partida finalizada! ${winnerName} venceu e permanece em campo. Escolha o próximo adversário.`, 'success', 4500);
     }
@@ -992,19 +1160,43 @@ export const Partidas = {
   // --------------------------------------------------------------------------
   selecionarProximoAdversario(opponentTeamId) {
     Storage.assertAdmin('Escolher próximo adversário');
-    if (!this.state.winnerTeamId) {
+
+    // Validação resiliente do vencedor da partida oficial:
+    // 1. this.state.winnerTeamId ou this.state.winner_team_id
+    // 2. Storage.getLiveMatch() (winnerTeamId / winner_team_id)
+    // 3. Última partida finalizada no histórico oficial (matches[0].winner)
+    let winnerId = this.state.winnerTeamId || this.state.winner_team_id;
+    if (!winnerId) {
+      const live = Storage.getLiveMatch();
+      if (live && (live.winnerTeamId || live.winner_team_id)) {
+        winnerId = live.winnerTeamId || live.winner_team_id;
+      }
+    }
+    if (!winnerId) {
+      const round = Storage.getCurrentRound();
+      const roundKey = round ? round.dateKey : Utils.getDateKey(new Date());
+      const matches = Storage.getMatches().filter(m => (round && m.roundId === round.id) || m.dateKey === roundKey);
+      if (matches.length > 0 && matches[0].winner) {
+        winnerId = matches[0].winner;
+      }
+    }
+
+    if (!winnerId) {
       Utils.toast('Defina o vencedor antes de escolher o adversário.', 'warning');
       return;
     }
 
+    this.state.winnerTeamId = winnerId;
+    this.state.winner_team_id = winnerId;
+
     // Regra: Não permitir jogar contra si mesmo
-    if (opponentTeamId === this.state.winnerTeamId) {
+    if (opponentTeamId === winnerId) {
       Utils.toast('O time vencedor não pode jogar contra si mesmo.', 'warning');
       return;
     }
 
     const teams = Storage.getTeams() || {};
-    const winnerTeam = teams[this.state.winnerTeamId];
+    const winnerTeam = teams[winnerId];
     const opponentTeam = teams[opponentTeamId];
 
     if (!winnerTeam || !opponentTeam) {
@@ -1027,7 +1219,7 @@ export const Partidas = {
       startedAt: null,
       pausedAt: null,
       lastTick: null,
-      homeTeamId: this.state.winnerTeamId,
+      homeTeamId: winnerId,
       awayTeamId: opponentTeamId,
       homeTeamName: winnerTeam.name,
       awayTeamName: opponentTeam.name,
@@ -1035,12 +1227,17 @@ export const Partidas = {
       awayScore: 0,
       goals: [],
       winnerTeamId: null,
+      winner_team_id: null,
       winnerTeamName: null,
+      winner_team_name: null,
       loserTeamId: null,
+      loser_team_id: null,
       isTie: false,
       tiePendingResolution: false,
       waitingTieNextMatch: false,
+      waiting_tie_next_match: false,
       waitingNextOpponent: false,
+      waiting_next_opponent: false,
       decisaoAdmin: false,
       tieNextMatch: null,
       lastMatchSummary: this.state.lastMatchSummary
@@ -1265,14 +1462,19 @@ export const Partidas = {
     Storage.saveLocalMatchOnly(this.getLivePayload());
   },
 
-  saveFullState() {
-    Storage.saveLiveMatch(this.getLivePayload());
+  async saveFullState() {
+    return await Storage.saveLiveMatch(this.getLivePayload());
   },
 
   getLivePayload() {
     const teams = Storage.getTeams() || {};
     const homeTeam = teams[this.state.homeTeamId];
     const awayTeam = teams[this.state.awayTeamId];
+    const winnerId = this.state.winnerTeamId || this.state.winner_team_id || null;
+    const winnerName = this.state.winnerTeamName || this.state.winner_team_name || (winnerId && teams[winnerId] ? teams[winnerId].name : null);
+    const loserId = this.state.loserTeamId || this.state.loser_team_id || null;
+    const isWaitingNext = Boolean(this.state.waitingNextOpponent !== undefined ? this.state.waitingNextOpponent : this.state.waiting_next_opponent);
+    const isWaitingTie = Boolean(this.state.waitingTieNextMatch !== undefined ? this.state.waitingTieNextMatch : this.state.waiting_tie_next_match);
 
     return {
       order: this.state.order,
@@ -1293,14 +1495,20 @@ export const Partidas = {
       homeScore: this.state.homeScore,
       awayScore: this.state.awayScore,
       goals: this.state.goals,
-      winnerTeamId: this.state.winnerTeamId,
-      winnerTeamName: this.state.winnerTeamName,
-      loserTeamId: this.state.loserTeamId,
+      winnerTeamId: winnerId,
+      winner_team_id: winnerId,
+      winnerTeamName: winnerName,
+      winner_team_name: winnerName,
+      loserTeamId: loserId,
+      loser_team_id: loserId,
       isTie: this.state.isTie,
       tiePendingResolution: this.state.tiePendingResolution,
-      waitingNextOpponent: this.state.waitingNextOpponent,
-      waitingTieNextMatch: this.state.waitingTieNextMatch,
+      waitingNextOpponent: isWaitingNext,
+      waiting_next_opponent: isWaitingNext,
+      waitingTieNextMatch: isWaitingTie,
+      waiting_tie_next_match: isWaitingTie,
       tieNextMatch: this.state.tieNextMatch,
+      outsideWaitingTeamIds: this.state.outsideWaitingTeamIds || [],
       decisaoAdmin: this.state.decisaoAdmin,
       lastMatchSummary: this.state.lastMatchSummary
     };
@@ -1427,8 +1635,13 @@ export const Partidas = {
     }
 
     // CASO 2: VENCEDOR DEFINIDO, AGUARDANDO ESCOLHA DO PRÓXIMO ADVERSÁRIO (Regras 4, 15, 16)
-    if (this.state.waitingNextOpponent && this.state.winnerTeamId) {
-      const winnerId = this.state.winnerTeamId;
+    const activeWinnerId = this.state.winnerTeamId || this.state.winner_team_id;
+    const isWaitingOpponent = Boolean(this.state.waitingNextOpponent || this.state.waiting_next_opponent);
+
+    if (isWaitingOpponent && activeWinnerId) {
+      const winnerId = activeWinnerId;
+      this.state.winnerTeamId = winnerId;
+      this.state.winner_team_id = winnerId;
       const winnerTeam = teams[winnerId] || { name: winnerId };
       const winnerColor = colors[winnerId] || '#3b82f6';
 

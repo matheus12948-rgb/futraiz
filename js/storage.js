@@ -658,6 +658,7 @@ export const Storage = {
           }
         });
         const key = this._getScopedKey('matches');
+        matches.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
         store.setItem(key, JSON.stringify(matches));
       }
     } catch (err) {
@@ -812,9 +813,27 @@ export const Storage = {
       }
 
       if (liveRow) {
-        const liveData = liveRow.payload && typeof liveRow.payload === 'object'
-          ? { ...liveRow.payload, ...liveRow }
-          : liveRow;
+        const payloadData = (liveRow.payload && typeof liveRow.payload === 'object') ? liveRow.payload : {};
+        const winnerId = liveRow.winner_team_id || payloadData.winnerTeamId || payloadData.winner_team_id || null;
+        const winnerName = liveRow.winner_team_name || payloadData.winnerTeamName || payloadData.winner_team_name || null;
+        const loserId = liveRow.loser_team_id || payloadData.loserTeamId || payloadData.loser_team_id || null;
+        const waitingNext = Boolean(liveRow.waiting_next_opponent !== undefined ? liveRow.waiting_next_opponent : (payloadData.waitingNextOpponent !== undefined ? payloadData.waitingNextOpponent : payloadData.waiting_next_opponent));
+        const waitingTie = Boolean(liveRow.waiting_tie_next_match !== undefined ? liveRow.waiting_tie_next_match : (payloadData.waitingTieNextMatch !== undefined ? payloadData.waitingTieNextMatch : payloadData.waiting_tie_next_match));
+
+        const liveData = {
+          ...payloadData,
+          ...liveRow,
+          winnerTeamId: winnerId,
+          winner_team_id: winnerId,
+          winnerTeamName: winnerName,
+          winner_team_name: winnerName,
+          loserTeamId: loserId,
+          loser_team_id: loserId,
+          waitingNextOpponent: waitingNext,
+          waiting_next_opponent: waitingNext,
+          waitingTieNextMatch: waitingTie,
+          waiting_tie_next_match: waitingTie
+        };
         this._saveLocalLiveMatch(liveData);
         this._emitChange('liveMatchUpdate', liveData);
       }
@@ -855,9 +874,27 @@ export const Storage = {
       const channel = supabase.channel(`futebol_${futebolId}`);
       channel.on('postgres_changes', { event: '*', schema: 'public', table: 'partida_ao_vivo' }, (payload) => {
         if (payload.new && payload.new.futebol_id === futebolId) {
-          const liveData = payload.new.payload && typeof payload.new.payload === 'object'
-            ? { ...payload.new.payload, ...payload.new }
-            : payload.new;
+          const payloadData = (payload.new.payload && typeof payload.new.payload === 'object') ? payload.new.payload : {};
+          const winnerId = payload.new.winner_team_id || payloadData.winnerTeamId || payloadData.winner_team_id || null;
+          const winnerName = payload.new.winner_team_name || payloadData.winnerTeamName || payloadData.winner_team_name || null;
+          const loserId = payload.new.loser_team_id || payloadData.loserTeamId || payloadData.loser_team_id || null;
+          const waitingNext = Boolean(payload.new.waiting_next_opponent !== undefined ? payload.new.waiting_next_opponent : (payloadData.waitingNextOpponent !== undefined ? payloadData.waitingNextOpponent : payloadData.waiting_next_opponent));
+          const waitingTie = Boolean(payload.new.waiting_tie_next_match !== undefined ? payload.new.waiting_tie_next_match : (payloadData.waitingTieNextMatch !== undefined ? payloadData.waitingTieNextMatch : payloadData.waiting_tie_next_match));
+
+          const liveData = {
+            ...payloadData,
+            ...payload.new,
+            winnerTeamId: winnerId,
+            winner_team_id: winnerId,
+            winnerTeamName: winnerName,
+            winner_team_name: winnerName,
+            loserTeamId: loserId,
+            loser_team_id: loserId,
+            waitingNextOpponent: waitingNext,
+            waiting_next_opponent: waitingNext,
+            waitingTieNextMatch: waitingTie,
+            waiting_tie_next_match: waitingTie
+          };
           this._saveLocalLiveMatch(liveData);
           this._emitChange('liveMatchUpdate', liveData);
         }
@@ -2363,6 +2400,12 @@ export const Storage = {
         ? { ...parsed.payload, ...parsed }
         : parsed;
 
+      const winnerId = base.winnerTeamId || base.winner_team_id || null;
+      const winnerName = base.winnerTeamName || base.winner_team_name || null;
+      const loserId = base.loserTeamId || base.loser_team_id || null;
+      const waitingNext = Boolean(base.waitingNextOpponent !== undefined ? base.waitingNextOpponent : base.waiting_next_opponent);
+      const waitingTie = Boolean(base.waitingTieNextMatch !== undefined ? base.waitingTieNextMatch : base.waiting_tie_next_match);
+
       return {
         ...base,
         order: base.order !== undefined ? base.order : (base.order_num !== undefined ? base.order_num : 1),
@@ -2372,12 +2415,17 @@ export const Storage = {
         awayTeamId: base.awayTeamId || base.away_team_id || 'time_2',
         homeTeamName: base.homeTeamName || base.time_casa_nome || 'Time 1',
         awayTeamName: base.awayTeamName || base.time_fora_nome || 'Time 2',
-        winnerTeamId: base.winnerTeamId !== undefined ? base.winnerTeamId : (base.winner_team_id !== undefined ? base.winner_team_id : null),
-        winnerTeamName: base.winnerTeamName || base.winner_team_name || null,
-        loserTeamId: base.loserTeamId !== undefined ? base.loserTeamId : (base.loser_team_id !== undefined ? base.loser_team_id : null),
+        winnerTeamId: winnerId,
+        winner_team_id: winnerId,
+        winnerTeamName: winnerName,
+        winner_team_name: winnerName,
+        loserTeamId: loserId,
+        loser_team_id: loserId,
         isTie: base.isTie !== undefined ? base.isTie : Boolean(base.is_tie),
-        waitingNextOpponent: base.waitingNextOpponent !== undefined ? base.waitingNextOpponent : Boolean(base.waiting_next_opponent),
-        waitingTieNextMatch: base.waitingTieNextMatch !== undefined ? base.waitingTieNextMatch : Boolean(base.waiting_tie_next_match),
+        waitingNextOpponent: waitingNext,
+        waiting_next_opponent: waitingNext,
+        waitingTieNextMatch: waitingTie,
+        waiting_tie_next_match: waitingTie,
         tieNextMatch: base.tieNextMatch || base.tie_next_match || null,
         lastMatchSummary: base.lastMatchSummary || base.last_match_summary || null,
         remainingSeconds: base.remainingSeconds !== undefined ? base.remainingSeconds : (base.tempo_restante !== undefined ? base.tempo_restante : 420),
@@ -2417,9 +2465,12 @@ export const Storage = {
     this.assertAdmin('Atualizar partida ao vivo');
     try {
       this._saveLocalLiveMatch(liveData);
+      this._emitChange('liveMatch', liveData);
+      this._emitChange('liveMatchUpdate', liveData);
 
-      if (this.currentFutebol) {
+      if (this.currentFutebol && supabase && typeof supabase.from === 'function') {
         const futId = this.currentFutebol.id;
+        let p;
         if (!liveData) {
           const resetRow = {
             futebol_id: futId,
@@ -2435,55 +2486,77 @@ export const Storage = {
             payload: null,
             updated_at: new Date().toISOString()
           };
-          supabase.from('partida_ao_vivo')
-            .upsert([resetRow], { onConflict: 'futebol_id' })
-            .catch(() => {});
+          p = supabase.from('partida_ao_vivo').upsert([resetRow], { onConflict: 'futebol_id' });
         } else {
           const remainingSecs = liveData.remainingSeconds !== undefined 
             ? liveData.remainingSeconds 
             : (liveData.tempo_restante !== undefined ? liveData.tempo_restante : (liveData.timeRemaining !== undefined ? liveData.timeRemaining : 420));
 
           const status = liveData.status || (liveData.isActive ? (liveData.isPaused ? 'paused' : 'running') : 'ready');
+          const winnerId = liveData.winnerTeamId || liveData.winner_team_id || null;
+          const winnerName = liveData.winnerTeamName || liveData.winner_team_name || null;
+          const loserId = liveData.loserTeamId || liveData.loser_team_id || null;
+          const waitingNext = Boolean(liveData.waitingNextOpponent !== undefined ? liveData.waitingNextOpponent : liveData.waiting_next_opponent);
+          const waitingTie = Boolean(liveData.waitingTieNextMatch !== undefined ? liveData.waitingTieNextMatch : liveData.waiting_tie_next_match);
+
           const row = {
             futebol_id: futId,
             status: status,
             order_num: liveData.order || 1,
-            home_team_id: liveData.homeTeamId || 'time_1',
-            away_team_id: liveData.awayTeamId || 'time_2',
-            time_casa_nome: liveData.homeTeamName || 'Time 1',
-            time_fora_nome: liveData.awayTeamName || 'Time 2',
+            home_team_id: liveData.homeTeamId || liveData.home_team_id || 'time_1',
+            away_team_id: liveData.awayTeamId || liveData.away_team_id || 'time_2',
+            time_casa_nome: liveData.homeTeamName || liveData.time_casa_nome || 'Time 1',
+            time_fora_nome: liveData.awayTeamName || liveData.time_fora_nome || 'Time 2',
             placar_casa: liveData.homeScore !== undefined ? liveData.homeScore : 0,
             placar_fora: liveData.awayScore !== undefined ? liveData.awayScore : 0,
             tempo_restante: remainingSecs,
             is_active: Boolean(liveData.isActive !== undefined ? liveData.isActive : (status === 'running' || status === 'paused')),
             is_paused: Boolean(liveData.isPaused !== undefined ? liveData.isPaused : (status === 'paused')),
-            winner_team_id: liveData.winnerTeamId || null,
-            winner_team_name: liveData.winnerTeamName || null,
-            loser_team_id: liveData.loserTeamId || null,
-            is_tie: Boolean(liveData.isTie),
-            waiting_next_opponent: Boolean(liveData.waitingNextOpponent),
-            waiting_tie_next_match: Boolean(liveData.waitingTieNextMatch),
-            tie_next_match: liveData.tieNextMatch || null,
-            last_match_summary: liveData.lastMatchSummary || null,
+            winner_team_id: winnerId,
+            winner_team_name: winnerName,
+            loser_team_id: loserId,
+            is_tie: Boolean(liveData.isTie !== undefined ? liveData.isTie : liveData.is_tie),
+            waiting_next_opponent: waitingNext,
+            waiting_tie_next_match: waitingTie,
+            tie_next_match: liveData.tieNextMatch || liveData.tie_next_match || null,
+            last_match_summary: liveData.lastMatchSummary || liveData.last_match_summary || null,
             started_at: liveData.startedAt || liveData.started_at || null,
             paused_at: liveData.pausedAt || liveData.paused_at || null,
             duration_seconds: liveData.durationSeconds || (liveData.durationMinutes ? liveData.durationMinutes * 60 : 420),
             remaining_at_start: liveData.remainingAtStart !== undefined ? liveData.remainingAtStart : remainingSecs,
             elapsed_seconds: liveData.elapsedSeconds || 0,
             gols: liveData.goals || liveData.gols || [],
-            payload: liveData,
+            payload: {
+              ...liveData,
+              winnerTeamId: winnerId,
+              winner_team_id: winnerId,
+              winnerTeamName: winnerName,
+              winner_team_name: winnerName,
+              loserTeamId: loserId,
+              loser_team_id: loserId,
+              waitingNextOpponent: waitingNext,
+              waiting_next_opponent: waitingNext
+            },
             updated_at: new Date().toISOString()
           };
-
-          supabase.from('partida_ao_vivo')
-            .upsert([row], { onConflict: 'futebol_id' })
-            .catch(err => console.warn('[Storage] Erro ao sincronizar partida ao vivo:', err));
+          p = supabase.from('partida_ao_vivo').upsert([row], { onConflict: 'futebol_id' });
         }
+
+        const promise = p.then(({ error }) => {
+          if (error) {
+            console.warn('[Storage] Erro ao sincronizar partida ao vivo:', error);
+            throw error;
+          }
+          return true;
+        });
+
+        // Previne unhandled rejection para chamadores síncronos
+        promise.catch(() => {});
+
+        return promise;
       }
 
-      this._emitChange('liveMatch', liveData);
-      this._emitChange('liveMatchUpdate', liveData);
-      return true;
+      return Promise.resolve(true);
     } catch (e) {
       throw e;
     }
