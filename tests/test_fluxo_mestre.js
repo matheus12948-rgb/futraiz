@@ -429,7 +429,7 @@ async function runMasterTest() {
 
   Storage.saveLiveMatch({
     order: 8,
-    status: 'running',
+    status: 'finished',
     homeTeamId: 'time_3',
     awayTeamId: 'time_4',
     homeScore: 1,

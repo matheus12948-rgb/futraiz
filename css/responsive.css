@@ -359,44 +359,116 @@ img, svg {
     max-width: 100% !important;
   }
 
-  /* Card Partida ao Vivo no Dashboard */
-  .dash-live-card {
-    padding: 1rem;
-    margin-bottom: 1rem;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
+  /* Grid de Resumo da Rodada (2x2 no mobile) */
+  .dash-stats-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.65rem !important;
+    margin-bottom: 1rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
   }
 
-  .dash-live-matchup {
+  .dash-stats-grid .stat-card {
+    padding: 0.75rem 0.85rem !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .dash-stats-grid .stat-value {
+    font-size: 1.75rem !important;
+  }
+
+  /* Central da Pelada: Grid Unificado no Mobile com Ordem Boleira Estrita */
+  .dash-layout-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Ordem mobile da Central da Pelada:
+     1. Cabeçalho (no topo da tela)
+     2. Partida atual (dash-hero-match-box)
+     3. Resumo da rodada (dash-stats-grid)
+     4. Artilharia da rodada
+     5. Raio-X da rodada
+     6. Classificação da rodada
+     7. Destaques da pelada
+     8. Ranking de Capas
+     9. Ranking Geral
+     10. Últimas partidas
+     Atalhos */
+  .dash-section-artilharia { order: 1 !important; }
+  .dash-section-raiox { order: 2 !important; }
+  .dash-section-classificacao { order: 3 !important; }
+  .dash-section-destaques { order: 4 !important; }
+  .dash-section-capas { order: 5 !important; }
+  .dash-section-geral { order: 6 !important; }
+  .dash-section-ultimas { order: 7 !important; }
+  .dash-section-shortcuts { order: 8 !important; }
+
+  .dash-card {
+    margin-bottom: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0.95rem !important;
+  }
+
+  .dash-destaques-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.5rem !important;
+  }
+
+  /* Card Partida ao Vivo / Standout no Dashboard Mobile */
+  .dash-live-card,
+  .dash-hero-card,
+  .dash-live-standout {
+    padding: 1rem !important;
+    margin-bottom: 1rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .dash-live-matchup,
+  .dash-live-standout .dash-live-matchup {
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) !important;
     gap: 0.5rem !important;
-    width: 100%;
-    max-width: 100%;
+    width: 100% !important;
+    max-width: 100% !important;
   }
 
-  .dash-live-team {
-    min-width: 0;
-    overflow: hidden;
+  .dash-live-team,
+  .dash-live-standout .dash-live-team {
+    min-width: 0 !important;
+    overflow: hidden !important;
   }
 
-  .dash-live-name {
-    font-size: 1.15rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  .dash-live-name,
+  .dash-live-standout .dash-live-name {
+    font-size: 1.15rem !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
   }
 
-  .dash-live-score-wrap {
-    font-size: 2.35rem;
-    gap: 0.4rem;
-    flex-shrink: 0;
+  .dash-live-score-wrap,
+  .dash-live-standout .dash-live-score-wrap {
+    font-size: 2.35rem !important;
+    gap: 0.4rem !important;
+    flex-shrink: 0 !important;
+  }
+
+  .dash-live-standout .dash-live-timer {
+    font-size: 1.35rem !important;
   }
 
   .dash-live-foot {
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    justify-content: space-between;
+    flex-wrap: wrap !important;
+    gap: 0.5rem !important;
+    justify-content: space-between !important;
   }
 
   .dash-admin-shortcuts {
@@ -498,61 +570,111 @@ img, svg {
     padding-right: 0.75rem !important;
   }
 
-  /* Scoreboard da Partida */
+  /* Scoreboard da Partida — Apresentação Broadcast Mobile */
   .scoreboard {
-    padding: 1rem 0.75rem;
+    padding: 1.15rem 0.85rem;
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
   }
 
+  .sb-arena {
+    grid-template-areas:
+      "home away"
+      "score score" !important;
+    gap: 0.65rem 0.75rem !important;
+    width: 100% !important;
+  }
+
   .sb-score {
-    font-size: clamp(3rem, 12vw, 4rem);
+    font-size: clamp(3.4rem, 13vw, 4.6rem) !important;
     min-width: 44px;
+    line-height: 0.95 !important;
+  }
+
+  .sb-sep {
+    font-size: clamp(1.8rem, 6vw, 2.4rem) !important;
   }
 
   .sb-team-name {
-    font-size: 1.15rem;
-    max-width: 100%;
+    font-size: clamp(1rem, 3.8vw, 1.25rem) !important;
+    max-width: 130px !important;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
+  .team-crest-badge {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
+    font-size: 1.05rem !important;
+  }
+
   .sb-timer {
-    font-size: 2rem;
+    font-size: clamp(2rem, 6vw, 2.5rem) !important;
+  }
+
+  .sb-scorers-summary {
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    padding: 0.65rem 0.75rem !important;
+  }
+
+  .sb-scorers-side {
+    width: 100% !important;
+    align-items: center !important;
+    text-align: center !important;
+  }
+
+  .sb-scorers-sep {
+    display: none !important;
   }
 
   .sb-goals {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.65rem;
-    max-width: 100%;
-    width: 100%;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.65rem !important;
+    max-width: 100% !important;
+    width: 100% !important;
   }
 
   .btn-goal {
-    height: 44px;
-    font-size: 0.95rem;
+    min-height: 44px !important;
+    height: auto !important;
+    font-size: 0.88rem !important;
+    padding: 0.5rem 0.4rem !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
   }
 
   .sb-controls {
-    justify-content: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    width: 100%;
-  }
-
-  .sb-controls .btn {
-    flex: 1 1 calc(50% - 0.5rem);
-    min-width: 110px;
-    min-height: 44px;
+    justify-content: space-between !important;
+    gap: 0.6rem !important;
+    flex-wrap: wrap !important;
+    width: 100% !important;
   }
 
   .sb-controls-left {
-    display: flex;
-    gap: 0.5rem;
-    flex: 1 1 auto;
+    display: flex !important;
+    gap: 0.5rem !important;
+    flex: 1 1 100% !important;
+    flex-wrap: wrap !important;
+  }
+
+  .sb-controls-left .btn {
+    flex: 1 1 calc(50% - 0.25rem) !important;
+    min-height: 44px !important;
+    justify-content: center !important;
+  }
+
+  .sb-controls .btn-danger {
+    flex: 1 1 100% !important;
+    min-height: 44px !important;
+    justify-content: center !important;
   }
 
   /* Outras Telas: Split Layout & Seleção */
@@ -829,12 +951,26 @@ img, svg {
   }
 
   .sb-score {
-    font-size: 2.75rem;
-    min-width: 36px;
+    font-size: 3.2rem !important;
+    min-width: 38px !important;
+    line-height: 0.95 !important;
+  }
+
+  .sb-sep {
+    font-size: 1.6rem !important;
   }
 
   .sb-team-name {
-    font-size: 1rem;
+    font-size: 0.95rem !important;
+    max-width: 105px !important;
+  }
+
+  .team-crest-badge {
+    width: 30px !important;
+    height: 30px !important;
+    min-width: 30px !important;
+    min-height: 30px !important;
+    font-size: 0.95rem !important;
   }
 
   .landing-title {
@@ -1004,11 +1140,28 @@ img, svg {
     gap: 1.25rem !important;
   }
 
+  .dash-stats-grid,
   .stats-grid {
     display: grid !important;
     grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
     gap: 0.85rem !important;
   }
+
+  .dash-layout-grid {
+    display: grid !important;
+    grid-template-columns: 1.35fr minmax(0, 1fr) !important;
+    gap: 1.25rem !important;
+  }
+
+  .dash-section-raiox { grid-column: 1; }
+  .dash-section-classificacao { grid-column: 1; }
+  .dash-section-ultimas { grid-column: 1; }
+
+  .dash-section-artilharia { grid-column: 2; }
+  .dash-section-destaques { grid-column: 2; }
+  .dash-section-capas { grid-column: 2; }
+  .dash-section-geral { grid-column: 2; }
+  .dash-section-shortcuts { grid-column: 2; }
 
   .sports-table th,
   .sports-table td {
@@ -1126,12 +1279,14 @@ img, svg {
     white-space: nowrap;
   }
 
+  .dash-stats-grid,
   .stats-grid {
     display: grid !important;
     grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
     gap: 1rem !important;
   }
 
+  .dash-layout-grid,
   .dash-columns,
   .dashboard-grid {
     display: grid !important;

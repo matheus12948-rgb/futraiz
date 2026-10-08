@@ -140,8 +140,7 @@ export const Configuracoes = {
     if (btnSettingsReset) {
       btnSettingsReset.addEventListener('click', (e) => {
         e.preventDefault();
-        const btnHeaderReset = document.getElementById('btn-reset-data');
-        if (btnHeaderReset) btnHeaderReset.click();
+        this.confirmarZerarTudo();
       });
     }
 
@@ -451,5 +450,107 @@ export const Configuracoes = {
 
     // 3. Seção de Dados Históricos Iniciais
     this.renderHistoricalSection();
+  },
+
+  confirmarZerarTudo() {
+    Storage.assertAdmin('Zerar todos os dados operacionais');
+    this.abrirModalZerarTudo();
+  },
+
+  abrirModalZerarTudo() {
+    const modalId = 'modal-confirm-reset-data';
+    let modal = document.getElementById(modalId);
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = modalId;
+      modal.className = 'modal';
+      document.body.appendChild(modal);
+    }
+
+    modal.innerHTML = `
+      <div class="modal-backdrop"></div>
+      <div class="modal-card" style="max-width: 500px;">
+        <div class="modal-header" style="border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.08));">
+          <h3 id="reset-modal-title" style="color: var(--danger, #ef4444); font-size: 1.15rem; font-weight: 700; text-transform: uppercase;">
+            ZERAR TODOS OS DADOS
+          </h3>
+          <button type="button" class="btn-close" data-close>✕</button>
+        </div>
+        <div class="modal-body" style="padding: 1.25rem 0;">
+          <div id="reset-modal-step1">
+            <p style="font-size: 0.95rem; line-height: 1.5; color: var(--text-main, #fff); margin-bottom: 1rem;">
+              Essa ação irá apagar todas as rodadas, partidas, histórico, gols, rankings e Capas deste futebol.
+            </p>
+            <div style="background: rgba(16, 185, 129, 0.1); border-left: 4px solid #10b981; padding: 0.85rem; border-radius: 4px; margin-bottom: 1rem;">
+              <strong style="color: #10b981; font-size: 0.9rem; display: block; margin-bottom: 0.2rem;">
+                Cadastro Preservado
+              </strong>
+              <p style="font-size: 0.85rem; color: var(--text-muted, #94a3b8); margin: 0;">
+                Os jogadores cadastrados serão preservados.
+              </p>
+            </div>
+            <p style="font-size: 0.82rem; color: var(--text-muted, #94a3b8); margin: 0;">
+              Clique em ZERAR TUDO para ir para a confirmação de segurança.
+            </p>
+          </div>
+          <div id="reset-modal-step2" style="display: none;">
+            <div class="alert alert-danger" style="background: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444; padding: 0.85rem; border-radius: 4px; margin-bottom: 1rem;">
+              <strong style="color: #ef4444; font-size: 0.95rem; display: block; margin-bottom: 0.25rem;">
+                Confirmação de Segurança
+              </strong>
+              <p style="font-size: 0.88rem; color: var(--text-main, #fff); margin: 0;">
+                Tem certeza que deseja apagar todos os dados operacionais? Esta ação é definitiva e não pode ser desfeita.
+              </p>
+            </div>
+            <p style="font-size: 0.85rem; color: var(--text-muted, #94a3b8); margin: 0;">
+              Os jogadores cadastrados continuarão disponíveis para criar novas rodadas.
+            </p>
+          </div>
+        </div>
+        <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 0.75rem; border-top: 1px solid var(--border-subtle, rgba(255,255,255,0.08)); padding-top: 1rem;">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-reset" data-close>CANCELAR</button>
+          <button type="button" class="btn btn-danger" id="btn-confirm-reset-step">ZERAR TUDO</button>
+        </div>
+      </div>
+    `;
+
+    const closeButtons = modal.querySelectorAll('[data-close]');
+    closeButtons.forEach(btn => {
+      btn.onclick = () => Utils.closeModal(modalId);
+    });
+    const backdrop = modal.querySelector('.modal-backdrop');
+    if (backdrop) backdrop.onclick = () => Utils.closeModal(modalId);
+
+    const step1El = modal.querySelector('#reset-modal-step1');
+    const step2El = modal.querySelector('#reset-modal-step2');
+    const btnAction = modal.querySelector('#btn-confirm-reset-step');
+    let step = 1;
+
+    btnAction.onclick = async () => {
+      if (step === 1) {
+        step = 2;
+        if (step1El) step1El.style.display = 'none';
+        if (step2El) step2El.style.display = 'block';
+        btnAction.textContent = 'ZERAR TUDO';
+      } else {
+        btnAction.disabled = true;
+        btnAction.textContent = 'Zerando...';
+        try {
+          await Storage.resetAll();
+          Utils.closeModal(modalId);
+          Utils.toast('Todos os dados operacionais foram zerados. Jogadores preservados.', 'success', 4000);
+          if (window.App) {
+            window.App.navigateTo('dashboard');
+            window.App.refreshAll();
+          }
+        } catch (err) {
+          btnAction.disabled = false;
+          btnAction.textContent = 'ZERAR TUDO';
+          Utils.toast(`Erro ao zerar dados: ${err.message}`, 'error', 5000);
+        }
+      }
+    };
+
+    Utils.openModal(modalId);
   }
 };

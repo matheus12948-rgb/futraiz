@@ -998,23 +998,46 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   padding-top: 0.35rem;
 }
 
-/* Partida ao Vivo Dominante no Dashboard */
-.dash-live-card {
-  background: #0B192A;
-  border: 1px solid var(--border);
-  border-left: 4px solid var(--primary);
-  border-radius: var(--radius-lg);
-  padding: 1.25rem;
+/* ==========================================================================
+   CENTRAL DA PELADA (NOVA DASHBOARD FUTRAIZ)
+   Estética Boleira Moderna, Fundo Escuro, Destaque Verde Neon, Sem Emojis
+   ========================================================================== */
+
+/* Cabeçalho da Central da Pelada */
+.dash-head {
   margin-bottom: 1.25rem;
 }
 
+/* Card Heroico / Partida Atual / Estados do Jogo */
+.dash-hero-match-box {
+  margin-bottom: 1.25rem;
+}
+
+.dash-hero-card {
+  background: #0B192A;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Estado: Partida Ao Vivo Destacada */
+.dash-live-standout {
+  border-left: 4px solid var(--primary);
+  background: linear-gradient(135deg, #0B192A 0%, #0d2238 100%);
+}
+
+.dash-live-standout .dash-live-head,
 .dash-live-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.85rem;
+  margin-bottom: 0.75rem;
 }
 
+.dash-live-standout .dash-live-tag,
 .dash-live-tag {
   display: inline-flex;
   align-items: center;
@@ -1026,11 +1049,12 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   color: var(--primary);
 }
 
+.dash-live-standout .dash-live-matchup,
 .dash-live-matchup {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 1rem;
+  gap: 1.25rem;
   padding: 0.5rem 0;
   text-align: center;
 }
@@ -1038,91 +1062,669 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 .dash-live-team.left { text-align: right; }
 .dash-live-team.right { text-align: left; }
 
+.dash-live-standout .dash-live-name,
 .dash-live-name {
   font-family: var(--font-heading);
-  font-size: 1.35rem;
+  font-size: 1.5rem;
   font-weight: 800;
   letter-spacing: 0.04em;
+  color: var(--text-main);
+  text-transform: uppercase;
 }
 
+.dash-live-standout .dash-live-score-wrap,
 .dash-live-score-wrap {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.75rem;
   font-family: var(--font-heading);
-  font-size: 3.2rem;
-  font-weight: 800;
+  font-size: 3.6rem;
+  font-weight: 900;
   line-height: 1;
 }
 
-.dash-live-sep {
-  color: var(--text-dim);
-  font-size: 2rem;
+.dash-live-standout .dash-live-score,
+.dash-live-score {
+  color: #ffffff;
+  text-shadow: 0 0 16px rgba(16, 185, 129, 0.45);
 }
 
-.dash-live-foot {
+.dash-live-standout .dash-live-sep,
+.dash-live-sep {
+  color: var(--text-muted);
+  font-size: 2.2rem;
+  font-weight: 400;
+}
+
+.dash-live-standout .dash-live-timer-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-top: 0.85rem;
-  padding-top: 0.85rem;
-  border-top: 1px solid var(--border-subtle);
+  justify-content: center;
+  margin: 0.5rem 0 0.85rem 0;
 }
 
+.dash-live-standout .dash-live-timer,
 .dash-live-timer {
   font-family: var(--font-heading);
-  font-size: 1.5rem;
+  font-size: 1.75rem;
   font-weight: 800;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   color: var(--primary);
+  background: rgba(16, 185, 129, 0.12);
+  padding: 0.25rem 0.85rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.2);
 }
 
-/* Colunas do Dashboard */
-.dash-columns {
-  display: grid;
-  grid-template-columns: 1fr;
+.dash-live-standout .dash-live-scorers {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+.dash-live-standout .dash-live-scorers strong {
+  color: var(--text-main);
+}
+
+/* Estado: Noite Encerrada Hero */
+.dash-night-finished-hero {
+  border-left: 4px solid #eab308;
+  background: linear-gradient(135deg, #0B192A 0%, #1a1e12 100%);
+}
+
+.dash-night-finished-hero .dash-hero-badge-row {
+  margin-bottom: 0.85rem;
+}
+
+.dash-finished-center {
+  display: flex;
+  align-items: center;
   gap: 1.25rem;
   margin-bottom: 1.25rem;
 }
 
-@media (min-width: 768px) {
-  .dash-columns {
-    grid-template-columns: 1.4fr 1fr;
-  }
+.dash-finished-title {
+  font-family: var(--font-heading);
+  font-size: 1.65rem;
+  font-weight: 800;
+  color: #facc15;
+  margin: 0 0 0.25rem 0;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
-.dash-round-info-ready {
+.dash-finished-desc {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+}
+
+/* Estados: Não configurada, Aguardando sorteio, Próxima partida */
+.dash-unconfigured-card,
+.dash-draw-ready-card,
+.dash-waiting-match-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.dash-unconf-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.dash-unconf-title {
+  font-family: var(--font-heading);
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: var(--text-main);
+  margin: 0 0 0.35rem 0;
+}
+
+.dash-unconf-desc {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--text-muted);
+}
+
+.dash-hero-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+/* C. Grid de Resumo da Rodada (4 Cards) */
+.dash-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.dash-stats-grid .stat-card {
+  background: #0B192A;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 0.9rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.dash-stats-grid .stat-card:hover {
+  border-color: rgba(16, 185, 129, 0.4);
+  transform: translateY(-2px);
+}
+
+.dash-stats-grid .stat-label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 0.4rem;
+}
+
+.dash-stats-grid .stat-value {
+  font-family: var(--font-heading);
+  font-size: 2.1rem;
+  font-weight: 900;
+  line-height: 1.1;
+  color: var(--text-main);
+}
+
+.dash-stats-grid .stat-value.highlight {
+  color: var(--primary);
+  text-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+}
+
+.dash-stats-grid .stat-sub {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  margin-top: 0.35rem;
+}
+
+/* Layout Central da Pelada: Grid Esportivo Portal */
+.dash-layout-grid {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 1.25rem;
+}
+
+.dash-card {
+  background: #0B192A;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 1.15rem;
+  margin-bottom: 1.25rem;
+}
+
+.dash-card .card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.dash-card .card-head-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dash-card .card-title {
+  font-family: var(--font-heading);
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+/* D. Seção Raio-X da Rodada (2 Gráficos) */
+.dash-raiox-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.dash-chart-subcard {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem;
+}
+
+.dash-chart-subhead {
+  font-family: var(--font-heading);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0 0 0.75rem 0;
+}
+
+/* Gráfico 1: Barras de Gols por Partida */
+.dash-barchart-wrap {
+  width: 100%;
+  overflow: hidden;
+}
+
+.dash-barchart-scroll {
+  display: flex;
+  overflow-x: auto;
+  padding: 0.5rem 0.25rem 0.25rem 0.25rem;
+  scrollbar-width: thin;
+}
+
+.dash-barchart-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.85rem;
+  min-height: 135px;
+  padding-bottom: 0.25rem;
+}
+
+.dash-bar-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 38px;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.dash-bar-col:hover {
+  transform: translateY(-2px);
+}
+
+.dash-bar-val {
+  font-family: var(--font-heading);
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--primary);
+  margin-bottom: 0.35rem;
+}
+
+.dash-bar-track {
+  width: 16px;
+  height: 90px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dash-bar-fill {
+  width: 100%;
+  background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+  border-radius: 6px;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+
+.dash-bar-label {
+  font-family: var(--font-heading);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-top: 0.4rem;
+}
+
+/* Gráfico 2: Evolução dos Gols (SVG) */
+.dash-linechart-wrap {
+  width: 100%;
+  overflow: hidden;
+}
+
+.dash-linechart-scroll {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.dash-chart-svg {
+  width: 100%;
+  min-width: 320px;
+  height: 155px;
+  display: block;
+}
+
+.dash-grid-line {
+  stroke: rgba(255, 255, 255, 0.06);
+  stroke-dasharray: 3, 3;
+}
+
+.dash-chart-polyline {
+  fill: none;
+  stroke: #10b981;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.45));
+}
+
+.dash-line-dot {
+  fill: #0B192A;
+  stroke: #10b981;
+  stroke-width: 2.5;
+  transition: r 0.2s ease;
+}
+
+.dash-chart-node:hover .dash-line-dot {
+  r: 6.5;
+  stroke: #ffffff;
+}
+
+.dash-dot-val {
+  font-family: var(--font-heading);
+  font-size: 11px;
+  font-weight: 800;
+  fill: #10b981;
+}
+
+.dash-x-label {
+  font-family: var(--font-heading);
+  font-size: 10px;
+  font-weight: 700;
+  fill: var(--text-muted);
+}
+
+.dash-chart-empty,
+.dash-empty-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1.5rem 1rem;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  text-align: center;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.15);
+}
+
+/* E, H & I. Listas Ranqueadas (Artilharia, Capas, Geral) */
+.dash-ranked-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.dash-ranked-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.85rem;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.dash-ranked-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.dash-ranked-pos {
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  font-weight: 900;
+  color: var(--text-muted);
+  width: 26px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.dash-ranked-item.top-scorer .dash-ranked-pos,
+.dash-ranked-item.top-capa .dash-ranked-pos {
+  color: #facc15;
+}
+
+.dash-ranked-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.dash-ranked-name {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dash-ranked-stars {
+  margin-top: 0.15rem;
+}
+
+.dash-ranked-metric {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.dash-ranked-metric strong {
+  font-family: var(--font-heading);
+  font-size: 1.25rem;
+  font-weight: 900;
+  color: var(--primary);
+  line-height: 1;
+}
+
+.dash-ranked-metric span {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.dash-ranked-general-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.badge-capa-small,
+.badge-goal-small {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-family: var(--font-heading);
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 0.2rem 0.45rem;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border-subtle);
+}
+
+.badge-capa-small {
+  color: #facc15;
+}
+
+.badge-goal-small {
+  color: var(--primary);
+}
+
+/* F. Tabela Compacta de Classificação da Rodada */
+.dash-table-compact {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.dash-table-compact th {
+  padding: 8px 6px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.dash-table-compact td {
+  padding: 8px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.dash-pos-badge {
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.dash-pos-badge.pos-1 {
+  color: #facc15;
+}
+
+.dash-team-pill {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+}
+
+.is-leader-row {
+  background: rgba(16, 185, 129, 0.05);
+}
+
+/* G. Destaques da Pelada Grid */
+.dash-destaques-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 0.75rem;
 }
 
-.dash-round-stat-item {
-  background: var(--bg-surface-2);
+.dash-destaque-card {
+  background: rgba(0, 0, 0, 0.25);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  padding: 0.65rem 0.85rem;
+  padding: 0.75rem 0.85rem;
   display: flex;
   flex-direction: column;
 }
 
-.drs-val {
+.dash-destaque-tag {
   font-family: var(--font-heading);
-  font-size: 1.6rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary);
+  margin-bottom: 0.35rem;
+}
+
+.dash-destaque-label {
+  font-size: 0.92rem;
   font-weight: 800;
   color: var(--text-main);
-  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 0.2rem;
 }
 
-.drs-val.highlight {
+.dash-destaque-detail {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* J. Últimas Partidas da Rodada */
+.dash-matches-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.dash-match-item {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 0.85rem;
+}
+
+.dash-match-tag {
+  font-family: var(--font-heading);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
   color: var(--primary);
+  margin-bottom: 0.3rem;
 }
 
-.drs-lbl {
+.dash-match-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.dash-match-team {
+  font-weight: 700;
+  font-size: 0.88rem;
+  flex: 1;
+}
+
+.dash-match-team.home {
+  text-align: right;
+}
+
+.dash-match-team.away {
+  text-align: left;
+}
+
+.dash-match-score {
+  font-family: var(--font-heading);
+  font-size: 1.25rem;
+  font-weight: 900;
+  color: #ffffff;
+  padding: 0.1rem 0.6rem;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.dash-match-scorers {
+  margin-top: 0.35rem;
   font-size: 0.75rem;
   color: var(--text-muted);
-  margin-top: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .round-status-box {
@@ -1758,138 +2360,309 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   color: var(--text-main);
 }
 
-/* PLACAR ESPORTIVO */
+/* ==========================================================================
+   PLACAR ESPORTIVO DE TRANSMISSÃO (ESTILO CHAMPIONS LEAGUE)
+   Hierarquia Clara: Badge no Topo, Times com Escudos Genéricos,
+   Placar Dominante, Cronômetro Central, Marcadores Compactos e Controles
+   ========================================================================== */
+
+/* Card Principal da Partida */
+.scoreboard.match-broadcast-card,
 .scoreboard {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 1.5rem 1rem 1.25rem 1rem;
-  margin-bottom: 1.25rem;
+  background: radial-gradient(130% 120% at 50% 0%, #0d233a 0%, #081626 50%, #050e1a 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-xl, 16px);
+  padding: 1.5rem 1.25rem 1.25rem 1.25rem;
+  margin-bottom: 1.5rem;
   position: relative;
   text-align: center;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  overflow: hidden;
 }
 
+/* Efeito de refletor sutil no topo do card */
+.scoreboard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 15%;
+  right: 15%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(16, 185, 129, 0.6), transparent);
+  pointer-events: none;
+}
+
+/* Topo: Barra da Transmissão e Badge Moderna */
 .sb-top {
   display: flex;
   justify-content: center;
-  margin-bottom: 1rem;
+  align-items: center;
+  margin-bottom: 1.25rem;
+}
+
+.sb-broadcast-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(15, 23, 42, 0.7);
+  padding: 0.35rem 0.95rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--text-dim, #64748b);
+  transition: all 0.3s ease;
+  flex-shrink: 0;
 }
 
 .live-badge {
-  font-family: var(--font-heading);
-  font-size: 0.78rem;
+  font-family: var(--font-heading, 'Barlow Condensed', sans-serif);
+  font-size: 0.8rem;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  padding: 0.15rem 0.6rem;
-  border-radius: var(--radius-xs);
-  background: var(--bg-surface-2);
-  border: 1px solid var(--border);
   color: var(--text-muted);
+  line-height: 1;
 }
 
-/* Confronto Principal */
-.sb-main {
+/* Estados da Badge */
+.live-badge.is-live {
+  color: var(--primary, #10b981);
+}
+
+.sb-broadcast-badge:has(.is-live) {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.08);
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.15);
+}
+
+.sb-broadcast-badge:has(.is-live) .live-dot {
+  background-color: var(--primary, #10b981);
+  box-shadow: 0 0 8px var(--primary, #10b981);
+  animation: pulseLiveDot 1.5s infinite;
+}
+
+@keyframes pulseLiveDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.85); }
+}
+
+.live-badge.is-paused {
+  color: var(--warning, #f59e0b);
+}
+
+.sb-broadcast-badge:has(.is-paused) {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.sb-broadcast-badge:has(.is-paused) .live-dot {
+  background-color: var(--warning, #f59e0b);
+  box-shadow: 0 0 8px var(--warning, #f59e0b);
+}
+
+.live-badge.is-finished {
+  color: #94a3b8;
+}
+
+/* ==========================================================================
+   ARENA DO CONFRONTO (TIMES E PLACAR DOMINANTE)
+   ========================================================================== */
+.sb-arena {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-areas:
+    "home away"
+    "score score";
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem 1rem;
+  width: 100%;
   margin-bottom: 0.75rem;
 }
 
+/* Time Mandante & Time Visitante */
 .sb-team {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
+}
+
+#block-team-home {
+  grid-area: home;
+  justify-self: start;
+}
+
+#block-team-away {
+  grid-area: away;
+  justify-self: end;
+}
+
+.sb-team-identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+/* Escudo / Badge Genérico do Time */
+.team-crest-badge {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-heading, 'Barlow Condensed', sans-serif);
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #ffffff;
+  background-color: var(--primary, #10b981);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+/* Nome do Time */
+.sb-team-name-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.sb-team-name {
+  font-family: var(--font-heading, 'Barlow Condensed', sans-serif);
+  font-size: clamp(1.15rem, 3.5vw, 1.7rem);
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-main, #ffffff);
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+
+/* ==========================================================================
+   PLACAR CENTRAL DOMINANTE (O PROTAGONISTA)
+   ========================================================================== */
+.sb-score-center {
+  grid-area: score;
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0;
+}
+
+.sb-score-display {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0.75rem, 2vw, 1.5rem);
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.4rem 1.5rem;
+  border-radius: var(--radius-lg, 12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.sb-score {
+  font-family: var(--font-heading, 'Barlow Condensed', sans-serif);
+  font-size: clamp(3.8rem, 11vw, 6.2rem);
+  font-weight: 900;
+  color: #ffffff;
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  min-width: 48px;
+  text-align: center;
+  display: inline-block;
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+}
+
+/* Animação suave quando sai gol */
+@keyframes scorePop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.18); color: var(--primary, #10b981); text-shadow: 0 0 24px var(--primary, #10b981); }
+  100% { transform: scale(1); }
+}
+
+.sb-score.score-pop {
+  animation: scorePop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* O divisor "×" (Multiplicação) — menor que os números */
+.sb-sep {
+  font-family: var(--font-heading, 'Barlow Condensed', sans-serif);
+  font-size: clamp(1.8rem, 5vw, 2.8rem);
+  font-weight: 300;
+  color: var(--text-dim, #64748b);
+  opacity: 0.65;
+  line-height: 1;
+  user-select: none;
+}
+
+/* ==========================================================================
+   CRONÔMETRO ESPORTIVO E STATUS (ABAIXO DO PLACAR)
+   ========================================================================== */
+.sb-clock {
+  margin: 0.5rem 0 1rem 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.5rem;
 }
 
-.sb-team-name {
-  font-family: var(--font-heading);
-  font-size: 1.35rem;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  color: var(--text-main);
+.sb-timer-container {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-}
-
-.team-chip {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: var(--primary);
-  flex-shrink: 0;
-}
-
-/* NÚMEROS DOMINANTES DO PLACAR */
-.sb-score {
-  font-family: var(--font-heading);
-  font-size: 4rem; /* 64px mobile */
-  font-weight: 800;
-  color: var(--text-main);
-  line-height: 0.95;
-  letter-spacing: -0.02em;
-  min-width: 50px;
-}
-
-@media (min-width: 768px) {
-  .sb-score {
-    font-size: 5.5rem; /* 88px desktop */
-    min-width: 70px;
-  }
-  .sb-team-name {
-    font-size: 1.65rem;
-  }
-}
-
-.sb-sep {
-  font-family: var(--font-heading);
-  font-size: 2.5rem;
-  color: var(--text-dim);
-  font-weight: 300;
-}
-
-/* CRONÔMETRO EXATAMENTE ABAIXO DO PLACAR */
-.sb-clock {
-  margin: 0.25rem 0 1rem 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.25rem;
+  justify-content: center;
 }
 
 .sb-timer {
-  font-family: var(--font-heading);
-  font-size: 2.1rem; /* 34px */
+  font-family: var(--font-heading, 'Barlow Condensed', monospace);
+  font-size: clamp(2.2rem, 5.5vw, 3rem);
   font-weight: 800;
   letter-spacing: 0.08em;
-  color: var(--text-main);
+  color: #ffffff;
   line-height: 1;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
 }
 
 .sb-timer.timer-warning {
-  color: var(--warning);
+  color: var(--warning, #f59e0b);
+  text-shadow: 0 0 16px rgba(245, 158, 11, 0.4);
 }
 
 .sb-status {
-  font-family: var(--font-heading);
+  font-family: var(--font-heading, 'Barlow Condensed', sans-serif);
   font-size: 0.85rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-weight: 800;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-muted);
+  line-height: 1.2;
 }
 
 .sb-status.status-live {
-  color: var(--primary);
+  color: var(--primary, #10b981);
+  text-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
 }
 
 .sb-status.status-paused {
-  color: var(--warning);
+  color: var(--warning, #f59e0b);
+}
+
+.sb-status.status-finished {
+  color: #94a3b8;
 }
 
 .sb-result {
@@ -1900,46 +2673,132 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   margin-top: 0.25rem;
 }
 
-/* Botões de Gol Compactos */
+/* ==========================================================================
+   RESUMO DE MARCADORES (COMPACTO E ELEGANTE)
+   ========================================================================== */
+.sb-scorers-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin: 0 auto 1.25rem auto;
+  max-width: 520px;
+  width: 100%;
+  padding: 0.5rem 0.85rem;
+  background: rgba(15, 23, 42, 0.45);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.sb-scorers-side {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.sb-scorers-home {
+  align-items: flex-start;
+  text-align: left;
+}
+
+.sb-scorers-away {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.sb-scorers-sep {
+  width: 1px;
+  align-self: stretch;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.sb-scorer-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-main, #ffffff);
+  padding: 0.15rem 0.45rem;
+  border-radius: var(--radius-xs);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sb-scorer-name {
+  max-width: 130px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sb-scorer-count {
+  font-family: var(--font-heading);
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+/* ==========================================================================
+   BOTÕES DE GOL
+   ========================================================================== */
 .sb-goals {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-  max-width: 380px;
-  margin: 0 auto 1.25rem auto;
+  gap: 0.85rem;
+  max-width: 440px;
+  margin: 0 auto 1.5rem auto;
 }
 
 .btn-goal {
-  height: 38px;
-  padding: 0 1rem;
-  border-radius: var(--radius-md);
-  background: var(--bg-surface-2);
-  border: 1px solid var(--border);
-  font-family: var(--font-heading);
+  min-height: 44px;
+  padding: 0.5rem 0.85rem;
+  border-radius: var(--radius-md, 8px);
+  background: rgba(15, 23, 42, 0.6);
+  border: 2px solid var(--border);
+  font-family: var(--font-heading, 'Barlow Condensed', sans-serif);
   font-size: 1.05rem;
   font-weight: 800;
-  letter-spacing: 0.06em;
-  color: var(--text-main);
+  letter-spacing: 0.05em;
+  color: var(--text-main, #ffffff);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.4rem;
+  gap: 0.45rem;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  user-select: none;
 }
 
-.btn-goal:hover {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: #07111F;
+.btn-goal:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+  filter: brightness(1.15);
 }
 
-/* Controles de Cronômetro & Finalização */
+.btn-goal:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn-goal:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
+   BARRA DE CONTROLES DA PARTIDA
+   ========================================================================== */
 .sb-controls {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border);
+  padding-top: 1.25rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   flex-wrap: wrap;
 }
 
@@ -1947,6 +2806,123 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.btn-sb-action {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 0 1.2rem;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.btn-sb-reset {
+  height: 40px;
+  padding: 0 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.btn-sb-reset:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.btn-sb-finish,
+.sb-controls .btn-danger {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  height: 40px;
+  padding: 0 1.25rem;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  color: #ef4444;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  transition: all 0.2s ease;
+}
+
+.btn-sb-finish:hover,
+.sb-controls .btn-danger:hover {
+  background: #ef4444;
+  color: #ffffff;
+  border-color: #ef4444;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.4);
+}
+
+/* ==========================================================================
+   DESKTOP (>= 768px): COMPOSIÇÃO HORIZONTAL E CINEMATOGRÁFICA
+   ========================================================================== */
+@media (min-width: 768px) {
+  .scoreboard.match-broadcast-card,
+  .scoreboard {
+    padding: 2rem 2.5rem 1.5rem 2.5rem;
+  }
+
+  .sb-arena {
+    grid-template-areas: "home score away";
+    grid-template-columns: 1fr auto 1fr;
+    gap: 2rem;
+    margin-bottom: 1rem;
+  }
+
+  #block-team-home {
+    justify-self: end;
+  }
+
+  #block-team-home .sb-team-identity {
+    flex-direction: row;
+    text-align: right;
+  }
+
+  #block-team-away {
+    justify-self: start;
+  }
+
+  #block-team-away .sb-team-identity {
+    flex-direction: row;
+    text-align: left;
+  }
+
+  .team-crest-badge {
+    width: 46px;
+    height: 46px;
+    min-width: 46px;
+    min-height: 46px;
+    font-size: 1.35rem;
+  }
+
+  .sb-team-name {
+    font-size: 1.75rem;
+    max-width: 250px;
+  }
+
+  .sb-score {
+    font-size: 6.2rem;
+    min-width: 80px;
+  }
+
+  .sb-sep {
+    font-size: 3rem;
+  }
+
+  .sb-timer {
+    font-size: 3rem;
+  }
+
+  .sb-goals {
+    max-width: 480px;
+  }
 }
 
 /* LINHA DO TEMPO ESPORTIVA (Vertical Discreta) */

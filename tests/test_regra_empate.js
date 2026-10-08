@@ -112,6 +112,7 @@ async function runTestEmpate() {
   }
 
   // 1. SETUP DE DADOS
+  Storage._store = global.localStorage;
   Storage.init();
   Storage.currentFutebol = { id: 'd0000000-0000-4000-8000-000000000004', nome: 'Fut Tie Test', admin_id: 'admin_123' };
   Storage.userRole = 'ADMIN';
@@ -221,8 +222,15 @@ async function runTestEmpate() {
     '4.1',
     `Próxima partida configurada automaticamente entre os 2 de fora: ${Partidas.state.tieNextMatch.homeTeamName} × ${Partidas.state.tieNextMatch.awayTeamName}`
   );
+  assert(Partidas.state.order === 2, '4.2', 'Ordem da próxima partida avançou automaticamente para 2');
+  assert(Partidas.state.status === 'ready', '4.3', 'Status da próxima partida é SCHEDULED (ready)');
+  assert(Partidas.state.homeScore === 0 && Partidas.state.awayScore === 0, '4.4', 'Placar da próxima partida é rigorosamente 0 × 0');
+  assert(Partidas.state.startedAt === null, '4.5', 'startedAt é null (sem started_at)');
+  assert(Partidas.state.isActive === false, '4.6', 'isActive é false (sem cronômetro rodando)');
+  assert(Partidas.state.winnerTeamId === null && Partidas.state.loserTeamId === null, '4.7', 'Sem vencedor ou perdedor na próxima partida');
+  assert(Partidas.state.waitingNextOpponent === false, '4.8', 'Sem escolha manual de adversário');
 
-  // --- ITEM 5: Não mostrar botões "TIME 1 PERMANECE" ou "TIME 2 PERMANECE" ---
+  // --- ITEM 5: Não mostrar botões "TIME 1 PERMANECE" ou "TIME 2 PERMANECE" e Avanço da Tela ---
   console.log('\n--- TESTE 5: Validação da Tela/Banner pós-empate (sem botões de permanência) ---');
   const bannerEl = domStore['match-quem-ganha-fica-banner'];
   assert(!!bannerEl, '5.1', 'Banner Quem Ganha Fica existe');
@@ -236,6 +244,26 @@ async function runTestEmpate() {
   assert(bannerEl.innerHTML.includes('SAI DE CAMPO'), '5.7', 'Banner indica saída dos dois times');
   assert(bannerEl.innerHTML.includes('OS TIMES DE FORA ENTRAM:'), '5.8', 'Banner contém "OS TIMES DE FORA ENTRAM:"');
   assert(bannerEl.innerHTML.includes('btn-start-tie-next-match'), '5.9', 'Banner contém botão com id btn-start-tie-next-match ([ INICIAR PARTIDA ])');
+
+  // Avanço da Tela do Scoreboard
+  assert(domStore['scoreboard-home-name'].textContent === 'Time 3', '5.10', 'Scoreboard avançou mandante para Time 3');
+  assert(domStore['scoreboard-away-name'].textContent === 'Time 4', '5.11', 'Scoreboard avançou visitante para Time 4');
+  assert(String(domStore['scoreboard-home-score'].textContent) === '0' && String(domStore['scoreboard-away-score'].textContent) === '0', '5.12', 'Scoreboard exibe placar zerado (0 × 0)');
+  assert(domStore['match-live-badge'].textContent.includes('PARTIDA 02'), '5.13', 'Badge superior exibe PARTIDA 02');
+  assert(domStore['btn-timer-start'].style.display !== 'none', '5.14', 'Botão INICIAR está visível para o administrador');
+
+  // Persistência em partida_ao_vivo
+  const liveMatchSaved = Storage.getLiveMatch();
+  assert(liveMatchSaved.homeTeamId === 'time_3' && liveMatchSaved.awayTeamId === 'time_4', '5.15', 'partida_ao_vivo salva com os times Time 3 x Time 4');
+  assert(liveMatchSaved.status === 'ready' && liveMatchSaved.order === 2, '5.16', 'partida_ao_vivo salva com status ready e ordem 2');
+
+  // Recarregar a página (F5) mantém a próxima partida preparada
+  Partidas.init();
+  assert(Partidas.state.order === 2 && Partidas.state.homeTeamId === 'time_3' && Partidas.state.status === 'ready', '5.17', 'Reload preserva a próxima partida preparada (Time 3 x Time 4, ready)');
+
+  // Proteção contra duplicação de partidas
+  Partidas.criarProximaPartidaAposEmpate(false);
+  assert(Partidas.state.order === 2, '5.18', 'Chamada redundante não duplica próxima partida (mantém ordem 2)');
 
   // --- ITEM 6: Não permitir que o administrador escolha quem permanece ---
   console.log('\n--- TESTE 6: Bloqueio de escolha artificial de vencedor no empate ---');
@@ -284,6 +312,35 @@ async function runTestEmpate() {
   assert(Partidas.state.order === 3, '8.4', 'Partida 03 criada com sucesso');
   assert(Partidas.state.homeTeamId === 'time_3' && Partidas.state.awayTeamId === 'time_1', '8.5', 'Partida 03 é Time 3 (permanece) × Time 1 (escolhido)');
 
+  // --- ITEM 8.B: Empate em partida posterior (Partida 03: Time 3 x Time 1 termina 1 x 1) ---
+  console.log('\n--- TESTE 8.B: Empate em Partida Posterior (Time 3 x Time 1 termina 1 x 1) ---');
+  Partidas.startOrResumeMatch();
+  Partidas.state.homeScore = 1;
+  Partidas.state.awayScore = 1;
+  Partidas.finalizarPartida();
+
+  assert(Partidas.state.order === 4, '8.6', 'Partida 04 preparada automaticamente após o empate da Partida 03');
+  assert(
+    (Partidas.state.homeTeamId === 'time_2' && Partidas.state.awayTeamId === 'time_4') ||
+    (Partidas.state.homeTeamId === 'time_4' && Partidas.state.awayTeamId === 'time_2'),
+    '8.7',
+    `Próxima partida configurada automaticamente entre os 2 que estavam fora (Time 2 e Time 4): ${Partidas.state.homeTeamName} × ${Partidas.state.awayTeamName}`
+  );
+  assert(Partidas.state.status === 'ready', '8.8', 'Partida 04 criada em status ready (SCHEDULED)');
+  assert(Partidas.state.homeScore === 0 && Partidas.state.awayScore === 0, '8.9', 'Partida 04 inicia 0 × 0');
+  assert(String(domStore['scoreboard-home-score'].textContent) === '0' && String(domStore['scoreboard-away-score'].textContent) === '0', '8.10', 'Scoreboard da Partida 04 exibe 0 × 0');
+
+  // Inicia Partida 04: Time 2 vence Time 4 (1 x 0)
+  Partidas.startOrResumeMatch();
+  if (Partidas.state.homeTeamId === 'time_2') {
+    Partidas.state.homeScore = 1;
+    Partidas.state.awayScore = 0;
+  } else {
+    Partidas.state.homeScore = 0;
+    Partidas.state.awayScore = 1;
+  }
+  Partidas.finalizarPartida();
+
   // --- ITEM 9: Confirmar que empate NÃO atribui Capa ---
   console.log('\n--- TESTE 9: Confirmar que empate não atribui Capa ---');
   const capasDuringNight = Storage.getCapas();
@@ -291,12 +348,6 @@ async function runTestEmpate() {
 
   // --- ITEM 10: Confirmar que Capa só é atribuída no ENCERRAR NOITE ---
   console.log('\n--- TESTE 10: Confirmar atribuição de Capa SOMENTE no ENCERRAR NOITE ---');
-  // Finaliza Partida 03 com vitória do Time 3 (2 x 0)
-  Partidas.startOrResumeMatch();
-  Partidas.state.homeScore = 2;
-  Partidas.state.awayScore = 0;
-  Partidas.finalizarPartida();
-
   // Tabela antes do encerramento
   const matchesTotal = Storage.getMatches();
   const tabelaFinal = Tabela.calcularTabela(matchesTotal);
@@ -324,6 +375,8 @@ async function runTestEmpate() {
 
   if (failed > 0) {
     process.exit(1);
+  } else {
+    process.exit(0);
   }
 }
 

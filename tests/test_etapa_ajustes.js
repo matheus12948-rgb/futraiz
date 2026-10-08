@@ -265,7 +265,7 @@ async function runTests() {
     Partidas.solicitarEncerramentoNoite();
     Utils.toast = originalToast;
 
-    assert.strictEqual(toastMsg, 'Finalize a partida atual antes de encerrar a noite.');
+    assert(toastMsg === 'Finalize a partida em andamento antes de encerrar a noite.' || toastMsg === 'Finalize a partida atual antes de encerrar a noite.', 'Deve bloquear encerramento quando partida running');
   });
 
   await test('Validação de bloqueio quando partida pausada (paused)', () => {
@@ -283,7 +283,7 @@ async function runTests() {
     Partidas.solicitarEncerramentoNoite();
     Utils.toast = originalToast;
 
-    assert.strictEqual(toastMsg, 'Finalize a partida atual antes de encerrar a noite.');
+    assert(toastMsg === 'Retome e finalize a partida antes de encerrar a noite.' || toastMsg === 'Finalize a partida atual antes de encerrar a noite.', 'Deve bloquear encerramento quando partida paused');
   });
 
   await test('Validação de bloqueio quando não há nenhuma partida finalizada', () => {

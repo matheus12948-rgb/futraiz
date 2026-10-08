@@ -22,7 +22,7 @@ export const Sorteio = {
     this.render();
 
     Storage.onChange((type) => {
-      if (['currentRound', 'teams', 'selectedPlayers', 'newRound', 'players'].includes(type)) {
+      if (['currentRound', 'teams', 'selectedPlayers', 'newRound', 'players', 'reset'].includes(type)) {
         this.restoreSelection();
         this.render();
       }
@@ -33,6 +33,8 @@ export const Sorteio = {
     const savedIds = Storage.getSelectedPlayerIds();
     if (Array.isArray(savedIds)) {
       this.selectedPlayerIds = new Set(savedIds);
+    } else {
+      this.selectedPlayerIds = new Set();
     }
   },
 

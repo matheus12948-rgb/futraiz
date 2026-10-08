@@ -24,6 +24,7 @@ import { Tabela } from './tabela.js';
 export const Partidas = {
   timerInterval: null,
   publicTickerInterval: null,
+  _isTransitioning: false,
 
   // Estado da partida e do fluxo "Quem Ganha Fica"
   state: {
@@ -69,9 +70,27 @@ export const Partidas = {
 
     // Sincronização via Supabase Realtime
     Storage.onChange((type, data) => {
-      if (type === 'liveMatchUpdate' && data) {
+      if (this._isTransitioning) {
+        return;
+      }
+      if (type === 'liveMatchUpdate') {
         this.handleLiveUpdate(data);
-      } else if (['currentRound', 'teams', 'newRound', 'nightFinalized', 'matches'].includes(type)) {
+      } else if (['currentRound', 'teams', 'newRound', 'nightFinalized', 'matches', 'reset'].includes(type)) {
+        if (type !== 'nightFinalized' && type !== 'reset' && (this.state.status === 'running' || this.state.status === 'paused')) {
+          const round = Storage.getCurrentRound();
+          if (round && round.status !== 'FINISHED') {
+            return;
+          }
+        }
+        if (this.timerInterval) {
+          clearInterval(this.timerInterval);
+          this.timerInterval = null;
+        }
+        if (this.publicTickerInterval) {
+          clearInterval(this.publicTickerInterval);
+          this.publicTickerInterval = null;
+        }
+        this.hideNightFinishedUI();
         this.restoreOrInitMatch();
         this.render();
       }
@@ -80,7 +99,7 @@ export const Partidas = {
 
   calculateCurrentRemainingSeconds(state = this.state) {
     if (!state) return 0;
-    const totalSecs = state.durationSeconds || (state.durationMinutes ? state.durationMinutes * 60 : 420);
+    const totalSecs = state.durationSeconds || state.duration_seconds || (state.durationMinutes ? state.durationMinutes * 60 : 420);
 
     if (state.status === 'ready') {
       return totalSecs;
@@ -89,14 +108,25 @@ export const Partidas = {
       return 0;
     }
     if (state.status === 'paused') {
-      return state.remainingSeconds !== undefined ? Math.max(0, state.remainingSeconds) : totalSecs;
+      const rem = state.remainingSeconds !== undefined ? state.remainingSeconds : state.tempo_restante;
+      return rem !== undefined ? Math.max(0, rem) : totalSecs;
     }
     if (state.status === 'running') {
-      if (state.startedAt) {
-        const startedTime = new Date(state.startedAt).getTime();
+      const startedAtIso = state.startedAt || state.started_at;
+      if (!startedAtIso) {
+        state.startedAt = new Date().toISOString();
+        if (state.remainingAtStart === undefined && state.remaining_at_start === undefined) {
+          state.remainingAtStart = state.remainingSeconds !== undefined ? state.remainingSeconds : (state.tempo_restante !== undefined ? state.tempo_restante : totalSecs);
+        }
+      }
+      const rawStart = state.startedAt || state.started_at;
+      const startedTime = new Date(rawStart).getTime();
+      if (!isNaN(startedTime)) {
         const now = Date.now();
         const elapsedSinceStart = Math.max(0, Math.floor((now - startedTime) / 1000));
-        const baseRemaining = state.remainingAtStart !== undefined          ? state.remainingAtStart          : (state.remainingSeconds !== undefined ? state.remainingSeconds : totalSecs);
+        const baseRemaining = (state.remainingAtStart !== undefined ? state.remainingAtStart : state.remaining_at_start) !== undefined
+          ? (state.remainingAtStart !== undefined ? state.remainingAtStart : state.remaining_at_start)
+          : (state.remainingSeconds !== undefined ? state.remainingSeconds : (state.tempo_restante !== undefined ? state.tempo_restante : totalSecs));
         return Math.max(0, baseRemaining - elapsedSinceStart);
       }
       return state.remainingSeconds !== undefined ? Math.max(0, state.remainingSeconds) : totalSecs;
@@ -105,22 +135,77 @@ export const Partidas = {
   },
 
   handleLiveUpdate(liveData) {
-    if (!liveData) return;
+    if (this._isTransitioning) {
+      return;
+    }
+    if (!liveData) {
+      const round = Storage.getCurrentRound();
+      if ((this.state.status === 'running' || this.state.status === 'paused') && round && round.status !== 'FINISHED') {
+        return;
+      }
+      if (this.timerInterval) {
+        clearInterval(this.timerInterval);
+        this.timerInterval = null;
+      }
+      if (this.publicTickerInterval) {
+        clearInterval(this.publicTickerInterval);
+        this.publicTickerInterval = null;
+      }
+      this.hideNightFinishedUI();
+      this.restoreOrInitMatch();
+      this.render();
+      return;
+    }
+
+    const round = Storage.getCurrentRound();
+    if (round && round.status === 'FINISHED') {
+      if (this.timerInterval) {
+        clearInterval(this.timerInterval);
+        this.timerInterval = null;
+      }
+      if (this.publicTickerInterval) {
+        clearInterval(this.publicTickerInterval);
+        this.publicTickerInterval = null;
+      }
+      this.state.status = 'finished';
+      this.state.isActive = false;
+      this.state.isPaused = false;
+      this.state.waitingNextOpponent = false;
+      this.state.waiting_next_opponent = false;
+      this.state.waitingTieNextMatch = false;
+      this.state.waiting_tie_next_match = false;
+      this.render();
+      return;
+    }
 
     const data = liveData.payload && typeof liveData.payload === 'object'
       ? { ...liveData.payload, ...liveData }
       : liveData;
 
-    this.state.order = data.order !== undefined ? data.order : (data.order_num !== undefined ? data.order_num : this.state.order);
-    this.state.homeTeamId = data.homeTeamId || data.home_team_id || this.state.homeTeamId;
-    this.state.awayTeamId = data.awayTeamId || data.away_team_id || this.state.awayTeamId;
-    this.state.homeTeamName = data.homeTeamName || data.time_casa_nome || this.state.homeTeamName;
-    this.state.awayTeamName = data.awayTeamName || data.time_fora_nome || this.state.awayTeamName;
-    this.state.homeScore = data.homeScore !== undefined ? data.homeScore : (data.placar_casa !== undefined ? data.placar_casa : this.state.homeScore);
-    this.state.awayScore = data.awayScore !== undefined ? data.awayScore : (data.placar_fora !== undefined ? data.placar_fora : this.state.awayScore);
-    this.state.goals = Array.isArray(data.goals) ? data.goals : (Array.isArray(data.gols) ? data.gols : []);
+    const incomingOrder = data.order_num !== undefined ? data.order_num : (data.order !== undefined ? data.order : this.state.order);
+
+    // Proteção contra eventos Realtime atrasados ou fora de ordem:
+    // Um evento de partida antiga (order menor) NUNCA pode sobrescrever a partida preparada atual
+    if (incomingOrder < this.state.order) {
+      return;
+    }
 
     const newStatus = data.status || (data.is_active ? (data.is_paused ? 'paused' : 'running') : (data.isActive ? (data.isPaused ? 'paused' : 'running') : 'ready'));
+
+    // Se o estado local já está em 'ready' (partida preparada) para este order, não aceitar reversão para 'finished' de eventos atrasados
+    if (incomingOrder === this.state.order && this.state.status === 'ready' && newStatus === 'finished') {
+      return;
+    }
+
+    this.state.order = incomingOrder;
+    this.state.homeTeamId = data.home_team_id || data.homeTeamId || this.state.homeTeamId;
+    this.state.awayTeamId = data.away_team_id || data.awayTeamId || this.state.awayTeamId;
+    this.state.homeTeamName = data.time_casa_nome || data.homeTeamName || this.state.homeTeamName;
+    this.state.awayTeamName = data.time_fora_nome || data.awayTeamName || this.state.awayTeamName;
+    this.state.homeScore = data.placar_casa !== undefined ? data.placar_casa : (data.homeScore !== undefined ? data.homeScore : this.state.homeScore);
+    this.state.awayScore = data.placar_fora !== undefined ? data.placar_fora : (data.awayScore !== undefined ? data.awayScore : this.state.awayScore);
+    this.state.goals = Array.isArray(data.goals) ? data.goals : (Array.isArray(data.gols) ? data.gols : []);
+
     this.state.status = newStatus;
     this.state.isActive = newStatus === 'running' || newStatus === 'paused';
     this.state.isPaused = newStatus === 'paused';
@@ -191,12 +276,78 @@ export const Partidas = {
   },
 
   restoreOrInitMatch() {
-    const saved = Storage.getLiveMatch();
     const round = Storage.getCurrentRound();
-    const roundKey = round ? round.dateKey : Utils.getDateKey(new Date());
-    const matches = Storage.getMatches().filter(m => (round && m.roundId === round.id) || m.dateKey === roundKey);
+    if (round && round.status === 'FINISHED') {
+      if (this.timerInterval) {
+        clearInterval(this.timerInterval);
+        this.timerInterval = null;
+      }
+      if (this.publicTickerInterval) {
+        clearInterval(this.publicTickerInterval);
+        this.publicTickerInterval = null;
+      }
+      const matches = Storage.getMatches().filter(m => (round && m.roundId === round.id) || m.dateKey === round.dateKey);
+      const lastMatch = matches[0];
+      const teams = Storage.getTeams() || {};
+      const defaultMins = Storage.getDefaultMatchDurationMinutes() || 7;
+      this.state = {
+        order: matches.length,
+        status: 'finished',
+        isActive: false,
+        isPaused: false,
+        durationMinutes: defaultMins,
+        durationSeconds: defaultMins * 60,
+        remainingSeconds: 0,
+        startedAt: null,
+        pausedAt: null,
+        lastTick: null,
+        homeTeamId: lastMatch ? lastMatch.homeTeamId : 'time_1',
+        awayTeamId: lastMatch ? lastMatch.awayTeamId : 'time_2',
+        homeTeamName: lastMatch ? lastMatch.homeTeamName : (teams.time_1?.name || 'Time 1'),
+        awayTeamName: lastMatch ? lastMatch.awayTeamName : (teams.time_2?.name || 'Time 2'),
+        homeScore: lastMatch ? lastMatch.homeScore : 0,
+        awayScore: lastMatch ? lastMatch.awayScore : 0,
+        goals: lastMatch ? (lastMatch.goals || []) : [],
+        winnerTeamId: lastMatch ? lastMatch.winner : null,
+        winner_team_id: lastMatch ? lastMatch.winner : null,
+        winnerTeamName: lastMatch && lastMatch.winner ? (teams[lastMatch.winner]?.name || lastMatch.winner) : null,
+        winner_team_name: lastMatch && lastMatch.winner ? (teams[lastMatch.winner]?.name || lastMatch.winner) : null,
+        loserTeamId: lastMatch ? lastMatch.loser : null,
+        loser_team_id: lastMatch ? lastMatch.loser : null,
+        isTie: lastMatch ? Boolean(lastMatch.isTie) : false,
+        tiePendingResolution: false,
+        waitingNextOpponent: false,
+        waiting_next_opponent: false,
+        waitingTieNextMatch: false,
+        waiting_tie_next_match: false,
+        tieNextMatch: null,
+        outsideWaitingTeamIds: [],
+        decisaoAdmin: false,
+        lastMatchSummary: lastMatch ? {
+          order: matches.length,
+          homeTeamName: lastMatch.homeTeamName,
+          awayTeamName: lastMatch.awayTeamName,
+          homeScore: lastMatch.homeScore,
+          awayScore: lastMatch.awayScore,
+          resultText: lastMatch.resultText || (lastMatch.winner ? `${teams[lastMatch.winner]?.name || lastMatch.winner} venceu` : 'Empate'),
+          winnerTeamId: lastMatch.winner,
+          winnerTeamName: lastMatch.winner ? (teams[lastMatch.winner]?.name || lastMatch.winner) : null
+        } : null
+      };
+      return;
+    }
 
-    if (saved && (saved.status === 'running' || saved.status === 'paused' || saved.waitingNextOpponent || saved.waiting_next_opponent || saved.waitingTieNextMatch || saved.waiting_tie_next_match || (saved.goals && saved.goals.length > 0))) {
+    const saved = Storage.getLiveMatch();
+    const roundKey = round ? round.dateKey : Utils.getDateKey(new Date());
+    const rawMatches = Storage.getMatches().filter(m => (round && m.roundId === round.id) || m.dateKey === roundKey);
+    const matches = [...rawMatches].sort((a, b) => {
+      const ordA = a.matchOrder || a.ordem || 0;
+      const ordB = b.matchOrder || b.ordem || 0;
+      if (ordB !== ordA) return ordB - ordA;
+      return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+    });
+
+    if (saved && (saved.status === 'ready' || saved.status === 'running' || saved.status === 'paused' || saved.waitingNextOpponent || saved.waiting_next_opponent || saved.waitingTieNextMatch || saved.waiting_tie_next_match || (saved.goals && saved.goals.length > 0))) {
       const winnerId = saved.winnerTeamId || saved.winner_team_id || (saved.waitingNextOpponent && matches.length > 0 ? matches[0].winner : null);
       const teams = Storage.getTeams() || {};
       const winnerName = saved.winnerTeamName || saved.winner_team_name || (winnerId && teams[winnerId] ? teams[winnerId].name : null);
@@ -204,13 +355,26 @@ export const Partidas = {
       const isWaitingOpponent = Boolean(saved.waitingNextOpponent !== undefined ? saved.waitingNextOpponent : saved.waiting_next_opponent);
       const isWaitingTie = Boolean(saved.waitingTieNextMatch !== undefined ? saved.waitingTieNextMatch : saved.waiting_tie_next_match);
 
+      const savedStatus = saved.status || (saved.isActive ? (saved.isPaused ? 'paused' : 'running') : 'ready');
+      const savedOrder = saved.order_num !== undefined ? saved.order_num : (saved.order !== undefined ? saved.order : (matches.length + (savedStatus === 'finished' ? 0 : 1)));
+      const homeId = saved.home_team_id || saved.homeTeamId || 'time_1';
+      const awayId = saved.away_team_id || saved.awayTeamId || 'time_2';
+      const homeName = saved.time_casa_nome || saved.homeTeamName || (teams[homeId]?.name || 'Time 1');
+      const awayName = saved.time_fora_nome || saved.awayTeamName || (teams[awayId]?.name || 'Time 2');
+
       this.state = {
         ...this.state,
         ...saved,
-        order: saved.order || (matches.length + (saved.status === 'finished' ? 0 : 1)),
-        status: saved.status || (saved.isActive ? (saved.isPaused ? 'paused' : 'running') : 'ready'),
-        isActive: Boolean(saved.isActive),
-        isPaused: Boolean(saved.isPaused),
+        order: savedOrder,
+        status: savedStatus,
+        isActive: savedStatus === 'running' || savedStatus === 'paused',
+        isPaused: savedStatus === 'paused',
+        homeTeamId: homeId,
+        awayTeamId: awayId,
+        homeTeamName: homeName,
+        awayTeamName: awayName,
+        homeScore: saved.placar_casa !== undefined ? saved.placar_casa : (saved.homeScore !== undefined ? saved.homeScore : 0),
+        awayScore: saved.placar_fora !== undefined ? saved.placar_fora : (saved.awayScore !== undefined ? saved.awayScore : 0),
         winnerTeamId: winnerId,
         winner_team_id: winnerId,
         winnerTeamName: winnerName,
@@ -221,11 +385,12 @@ export const Partidas = {
         waiting_next_opponent: isWaitingOpponent,
         waitingTieNextMatch: isWaitingTie,
         waiting_tie_next_match: isWaitingTie,
-        outsideWaitingTeamIds: saved.outsideWaitingTeamIds || Object.keys(teams).filter(id => id !== saved.homeTeamId && id !== saved.awayTeamId),
+        tieNextMatch: saved.tieNextMatch || saved.tie_next_match || null,
+        outsideWaitingTeamIds: saved.outsideWaitingTeamIds || Object.keys(teams).filter(id => id !== homeId && id !== awayId),
         durationMinutes: saved.durationMinutes || (Storage.getDefaultMatchDurationMinutes() || 7),
         durationSeconds: saved.durationSeconds || ((saved.durationMinutes || (Storage.getDefaultMatchDurationMinutes() || 7)) * 60),
-        remainingSeconds: saved.remainingSeconds !== undefined ? saved.remainingSeconds : ((saved.durationMinutes || (Storage.getDefaultMatchDurationMinutes() || 7)) * 60),
-        goals: saved.goals || []
+        remainingSeconds: saved.remainingSeconds !== undefined ? saved.remainingSeconds : (saved.tempo_restante !== undefined ? saved.tempo_restante : ((saved.durationMinutes || (Storage.getDefaultMatchDurationMinutes() || 7)) * 60)),
+        goals: saved.goals || saved.gols || []
       };
 
       // Se waitingNextOpponent estiver ativo mas winnerTeamId estiver vazio por qualquer motivo,
@@ -243,14 +408,14 @@ export const Partidas = {
       }
 
       // Recalcula tempo caso estivesse em andamento
-      if (this.state.status === 'running' && !this.state.isPaused && this.state.lastTick) {
-        const elapsed = Math.floor((Date.now() - this.state.lastTick) / 1000);
-        this.state.remainingSeconds = Math.max(0, this.state.remainingSeconds - elapsed);
-        if (this.state.remainingSeconds > 0) {
+      if (this.state.status === 'running' && !this.state.isPaused) {
+        const currentRemaining = this.calculateCurrentRemainingSeconds();
+        this.state.remainingSeconds = currentRemaining;
+        if (currentRemaining > 0) {
           this.startTimerLoop();
         } else {
           this.state.remainingSeconds = 0;
-          this.state.status = 'finished';
+          this.updateTimerDisplay();
         }
       }
     } else {
@@ -262,7 +427,14 @@ export const Partidas = {
     const teams = Storage.getTeams() || {};
     const defaultMins = this.state.durationMinutes || Storage.getDefaultMatchDurationMinutes() || 7;
 
-    if (matches.length === 0) {
+    const sortedMatches = [...matches].sort((a, b) => {
+      const ordA = a.matchOrder || a.ordem || 0;
+      const ordB = b.matchOrder || b.ordem || 0;
+      if (ordB !== ordA) return ordB - ordA;
+      return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+    });
+
+    if (sortedMatches.length === 0) {
       // Primeira partida: Time 1 x Time 2 (obrigatória)
       this.state = {
         order: 1,
@@ -292,12 +464,12 @@ export const Partidas = {
         lastMatchSummary: null
       };
     } else {
-      const lastMatch = matches[0]; // mais recente
+      const lastMatch = sortedMatches[0]; // mais recente
       if (lastMatch.winner) {
         const winnerId = lastMatch.winner;
         const winnerTeam = teams[winnerId] || { name: winnerId };
         this.state = {
-          order: matches.length,
+          order: sortedMatches.length,
           status: 'finished',
           isActive: false,
           isPaused: false,
@@ -327,7 +499,7 @@ export const Partidas = {
           outsideWaitingTeamIds: Object.keys(teams).filter(id => id !== lastMatch.homeTeamId && id !== lastMatch.awayTeamId),
           decisaoAdmin: Boolean(lastMatch.decisaoAdmin),
           lastMatchSummary: {
-            order: matches.length,
+            order: sortedMatches.length,
             homeTeamName: lastMatch.homeTeamName,
             awayTeamName: lastMatch.awayTeamName,
             homeScore: lastMatch.homeScore,
@@ -338,50 +510,62 @@ export const Partidas = {
           }
         };
       } else {
-        // Empate: ambos saem de campo, os 2 times que estavam fora entram
-        const allTeamIds = Object.keys(teams);
+        // Empate: ambos saem de campo, os 2 times que estavam fora entram na próxima partida
+        const allTeamIds = Object.keys(teams).length >= 4 ? Object.keys(teams) : ['time_1', 'time_2', 'time_3', 'time_4'];
         const outsideTeamIds = allTeamIds.filter(id => id !== lastMatch.homeTeamId && id !== lastMatch.awayTeamId);
         const nextHomeId = outsideTeamIds[0] || 'time_3';
         const nextAwayId = outsideTeamIds[1] || 'time_4';
-        const nextHomeTeam = teams[nextHomeId] || { name: 'Time 3' };
-        const nextAwayTeam = teams[nextAwayId] || { name: 'Time 4' };
+        const nextHomeTeam = teams[nextHomeId] || { name: nextHomeId.replace('time_', 'Time ') };
+        const nextAwayTeam = teams[nextAwayId] || { name: nextAwayId.replace('time_', 'Time ') };
 
         this.state = {
-          order: matches.length,
-          status: 'finished',
+          order: sortedMatches.length + 1,
+          status: 'ready',
           isActive: false,
           isPaused: false,
           durationMinutes: defaultMins,
           durationSeconds: defaultMins * 60,
           remainingSeconds: defaultMins * 60,
-          homeTeamId: lastMatch.homeTeamId,
-          awayTeamId: lastMatch.awayTeamId,
-          homeTeamName: lastMatch.homeTeamName,
-          awayTeamName: lastMatch.awayTeamName,
-          homeScore: lastMatch.homeScore,
-          awayScore: lastMatch.awayScore,
-          goals: lastMatch.goals || [],
+          startedAt: null,
+          pausedAt: null,
+          lastTick: null,
+          homeTeamId: nextHomeId,
+          awayTeamId: nextAwayId,
+          homeTeamName: nextHomeTeam.name,
+          awayTeamName: nextAwayTeam.name,
+          homeScore: 0,
+          awayScore: 0,
+          goals: [],
           winnerTeamId: null,
+          winner_team_id: null,
           winnerTeamName: null,
+          winner_team_name: null,
           loserTeamId: null,
+          loser_team_id: null,
           isTie: true,
           tiePendingResolution: false,
           waitingNextOpponent: false,
+          waiting_next_opponent: false,
           waitingTieNextMatch: true,
+          waiting_tie_next_match: true,
           tieNextMatch: {
             homeTeamId: nextHomeId,
             awayTeamId: nextAwayId,
             homeTeamName: nextHomeTeam.name,
             awayTeamName: nextAwayTeam.name
           },
+          outsideWaitingTeamIds: [lastMatch.homeTeamId, lastMatch.awayTeamId],
           decisaoAdmin: false,
           lastMatchSummary: {
-            order: matches.length,
+            order: sortedMatches.length,
             homeTeamName: lastMatch.homeTeamName,
             awayTeamName: lastMatch.awayTeamName,
             homeScore: lastMatch.homeScore,
             awayScore: lastMatch.awayScore,
-            resultText: 'Empate'
+            resultText: lastMatch.resultText || 'Empate',
+            winnerTeamId: null,
+            winnerTeamName: null,
+            isTie: true
           }
         };
       }
@@ -389,6 +573,8 @@ export const Partidas = {
   },
 
   bindEvents() {
+    if (this._eventsBound) return;
+    this._eventsBound = true;
     // Duração da partida
     const durationSelect = document.getElementById('match-duration-select');
     const customInput = document.getElementById('match-duration-custom');
@@ -457,13 +643,25 @@ export const Partidas = {
         this.selecionarProximoAdversario(opponentTeamId);
       }
     });
+
+    // Atualização imediata do cronômetro ao retornar à aba
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && this.state.status === 'running') {
+          this.state.remainingSeconds = this.calculateCurrentRemainingSeconds();
+          this.updateTimerDisplay();
+          if (!this.timerInterval && this.state.remainingSeconds > 0) {
+            this.startTimerLoop();
+          }
+        }
+      });
+    }
   },
 
   setDuration(minutes) {
     Storage.assertAdmin('Alterar tempo de partida');
     const round = Storage.getCurrentRound();
     if (round && round.status === 'FINISHED') {
-      Utils.toast('A noite já foi encerrada. Esta rodada é somente leitura.', 'warning');
       return;
     }
     if (this.state.status === 'running') {
@@ -475,6 +673,7 @@ export const Partidas = {
     this.state.durationMinutes = mins;
     this.state.durationSeconds = mins * 60;
     this.state.remainingSeconds = mins * 60;
+    this.state.remainingAtStart = mins * 60;
     this.updateTimerDisplay();
     this.saveLocalStateOnly();
   },
@@ -483,6 +682,11 @@ export const Partidas = {
   // CONTROLE DO CRONÔMETRO E PARTIDA
   // --------------------------------------------------------------------------
   iniciarPartida() {
+    const round = Storage.getCurrentRound();
+    if (round && round.status === 'FINISHED') {
+      Utils.toast('Esta noite já foi encerrada. Não é possível iniciar uma nova partida.', 'warning');
+      return;
+    }
     return this.startOrResumeMatch();
   },
 
@@ -501,13 +705,14 @@ export const Partidas = {
     }
 
     if (round.status === 'FINISHED') {
-      Utils.toast('A noite já foi encerrada. Esta rodada é somente leitura.', 'warning');
+      Utils.toast('Esta noite já foi encerrada. Não é possível iniciar uma nova partida.', 'warning');
       return;
     }
 
     if (this.state.waitingTieNextMatch) {
-      this.iniciarProximaPartidaAposEmpate();
-      return;
+      this.state.waitingTieNextMatch = false;
+      this.state.waiting_tie_next_match = false;
+      this.state.isTie = false;
     }
 
     if (this.state.waitingNextOpponent) {
@@ -550,6 +755,11 @@ export const Partidas = {
 
   resumeMatch() {
     Storage.assertAdmin('Retomar partida');
+    const round = Storage.getCurrentRound();
+    if (round && round.status === 'FINISHED') {
+      Utils.toast('Esta noite já foi encerrada. Não é possível iniciar uma nova partida.', 'warning');
+      return;
+    }
     if (this.state.status !== 'paused') return;
 
     const nowIso = new Date().toISOString();
@@ -592,11 +802,16 @@ export const Partidas = {
 
   resetTimer() {
     Storage.assertAdmin('Reiniciar cronômetro');
+    const round = Storage.getCurrentRound();
+    if (round && round.status === 'FINISHED') {
+      return;
+    }
     if (this.state.status === 'finished') return;
 
     if (confirm('Deseja reiniciar o cronômetro para o tempo inicial?')) {
       if (this.timerInterval) clearInterval(this.timerInterval);
       this.state.remainingSeconds = this.state.durationMinutes * 60;
+      this.state.remainingAtStart = this.state.durationMinutes * 60;
       this.state.status = 'ready';
       this.state.isActive = false;
       this.state.isPaused = false;
@@ -628,11 +843,10 @@ export const Partidas = {
       if (currentRemaining <= 0) {
         clearInterval(this.timerInterval);
         this.timerInterval = null;
-        this.state.status = 'finished';
+        this.state.remainingSeconds = 0;
         this.updateTimerDisplay();
         Utils.sound.playWhistle();
         Utils.toast('Tempo regulamentar esgotado! Finalize a partida.', 'warning', 5000);
-        this.solicitarFinalizacao(true);
       }
     }, 500);
   },
@@ -641,6 +855,9 @@ export const Partidas = {
     if (typeof document === 'undefined') return;
     const timerEl = document.getElementById('scoreboard-timer');
     if (timerEl) {
+      if (this.state.status === 'running') {
+        this.state.remainingSeconds = this.calculateCurrentRemainingSeconds();
+      }
       timerEl.textContent = Utils.formatSeconds(this.state.remainingSeconds);
     }
   },
@@ -652,7 +869,7 @@ export const Partidas = {
     Storage.assertAdmin('Registrar gol');
     const round = Storage.getCurrentRound();
     if (round && round.status === 'FINISHED') {
-      Utils.toast('A noite já foi encerrada. Esta rodada é somente leitura.', 'warning');
+      Utils.toast('Esta noite já foi encerrada. Não é possível registrar novos gols.', 'warning');
       return;
     }
     if (this.state.status === 'finished') {
@@ -838,6 +1055,11 @@ export const Partidas = {
 
   async registrarGol(teamId, playerId, playerName, customGoalId = null) {
     Storage.assertAdmin('Registrar gol');
+    const round = Storage.getCurrentRound();
+    if (round && round.status === 'FINISHED') {
+      throw new Error('Esta noite já foi encerrada. Não é possível registrar novos gols.');
+    }
+
     const teams = Storage.getTeams();
     const team = teams ? teams[teamId] : null;
     const teamName = team ? team.name : teamId;
@@ -901,6 +1123,11 @@ export const Partidas = {
 
   removerGol(goalId) {
     Storage.assertAdmin('Excluir gol');
+    const round = Storage.getCurrentRound();
+    if (round && round.status === 'FINISHED') {
+      return;
+    }
+
     const index = this.state.goals.findIndex(g => g.id === goalId);
     if (index === -1) return;
 
@@ -927,7 +1154,6 @@ export const Partidas = {
   solicitarFinalizacao(isAuto = false) {
     const round = Storage.getCurrentRound();
     if (round && round.status === 'FINISHED') {
-      Utils.toast('A noite já foi encerrada. Esta rodada é somente leitura.', 'warning');
       return;
     }
     if (this.state.status === 'finished') {
@@ -950,141 +1176,193 @@ export const Partidas = {
 
   finalizarPartida() {
     Storage.assertAdmin('Finalizar partida');
-    if (this.timerInterval) clearInterval(this.timerInterval);
-
-    const teams = Storage.getTeams() || {};
-    const colors = Storage.getTeamColors();
-    const round = Storage.getCurrentRound();
-
-    const homeTeam = teams[this.state.homeTeamId];
-    const awayTeam = teams[this.state.awayTeamId];
-
-    let winner = null;
-    let loser = null;
-    let isTie = false;
-    let resultText = 'Empate';
-
-    if (this.state.homeScore > this.state.awayScore) {
-      winner = this.state.homeTeamId;
-      loser = this.state.awayTeamId;
-      resultText = `${homeTeam ? homeTeam.name : 'Time 1'} venceu`;
-    } else if (this.state.awayScore > this.state.homeScore) {
-      winner = this.state.awayTeamId;
-      loser = this.state.homeTeamId;
-      resultText = `${awayTeam ? awayTeam.name : 'Time 2'} venceu`;
-    } else {
-      isTie = true;
+    if (this.timerInterval) {
+      clearInterval(this.timerInterval);
+      this.timerInterval = null;
     }
 
-    const elapsedSeconds = (this.state.durationMinutes * 60) - this.state.remainingSeconds;
+    this._isTransitioning = true;
+    try {
+      const teams = Storage.getTeams() || {};
+      const colors = Storage.getTeamColors();
+      const round = Storage.getCurrentRound();
 
-    const matchRecord = {
-      id: Utils.generateUUID(),
-      roundId: round && Utils.isUUID(round.id) ? round.id : null,
-      matchOrder: this.state.order,
-      date: round ? round.date : Utils.formatDate(new Date()),
-      time: Utils.formatTime(new Date()),
-      dateKey: round ? round.dateKey : Utils.getDateKey(new Date()),
-      homeTeamId: this.state.homeTeamId,
-      homeTeamName: homeTeam ? homeTeam.name : 'Time 1',
-      homeTeamColor: colors[this.state.homeTeamId] || '#3b82f6',
-      awayTeamId: this.state.awayTeamId,
-      awayTeamName: awayTeam ? awayTeam.name : 'Time 2',
-      awayTeamColor: colors[this.state.awayTeamId] || '#ef4444',
-      homeScore: this.state.homeScore,
-      awayScore: this.state.awayScore,
-      winner: winner,
-      loser: loser,
-      isTie: isTie,
-      decisaoAdmin: false,
-      resultText: resultText,
-      durationMinutes: this.state.durationMinutes,
-      durationPlayedFormatted: Utils.formatSeconds(elapsedSeconds),
-      goals: [...this.state.goals],
-      homePlayers: homeTeam ? homeTeam.players : [],
-      awayPlayers: awayTeam ? awayTeam.players : [],
-      createdAt: new Date().toISOString()
-    };
+      const homeTeam = teams[this.state.homeTeamId];
+      const awayTeam = teams[this.state.awayTeamId];
 
-    this.state.status = 'finished';
-    this.state.isActive = false;
-    this.state.isPaused = false;
-    this.state.isTie = isTie;
-    this.state.lastMatchSummary = {
-      order: this.state.order,
-      homeTeamName: matchRecord.homeTeamName,
-      awayTeamName: matchRecord.awayTeamName,
-      homeScore: matchRecord.homeScore,
-      awayScore: matchRecord.awayScore,
-      resultText: resultText,
-      winnerTeamId: winner,
-      winnerTeamName: winner ? (winner === this.state.homeTeamId ? (homeTeam ? homeTeam.name : 'Time 1') : (awayTeam ? awayTeam.name : 'Time 2')) : null
-    };
+      let winner = null;
+      let loser = null;
+      let isTie = false;
+      let resultText = 'Empate';
 
-    Utils.sound.playWhistle();
+      if (this.state.homeScore > this.state.awayScore) {
+        winner = this.state.homeTeamId;
+        loser = this.state.awayTeamId;
+        resultText = `${homeTeam ? homeTeam.name : 'Time 1'} venceu`;
+      } else if (this.state.awayScore > this.state.homeScore) {
+        winner = this.state.awayTeamId;
+        loser = this.state.homeTeamId;
+        resultText = `${awayTeam ? awayTeam.name : 'Time 2'} venceu`;
+      } else {
+        isTie = true;
+      }
 
-    if (isTie) {
-      // REGRA DEFINITIVA DE EMPATE:
-      // 1. Ambos os times recebem 1 ponto (já persistido no Storage e Tabela).
-      // 2. Ambos os times saem de campo.
-      // 3. Os dois times que estavam fora entram automaticamente.
-      // 4. A próxima partida é AUTOMATICAMENTE entre os dois times que estavam fora.
-      // 5. NÃO perguntar ao administrador quem permanece e NÃO escolher vencedor.
-      const allTeamIds = Object.keys(teams);
-      const outsideTeamIds = allTeamIds.filter(id => id !== this.state.homeTeamId && id !== this.state.awayTeamId);
+      const elapsedSeconds = (this.state.durationMinutes * 60) - this.state.remainingSeconds;
 
-      const nextHomeId = outsideTeamIds[0] || 'time_3';
-      const nextAwayId = outsideTeamIds[1] || 'time_4';
-      const nextHomeTeam = teams[nextHomeId] || { name: 'Time 3' };
-      const nextAwayTeam = teams[nextAwayId] || { name: 'Time 4' };
-
-      this.state.winnerTeamId = null;
-      this.state.winner_team_id = null;
-      this.state.winnerTeamName = null;
-      this.state.winner_team_name = null;
-      this.state.loserTeamId = null;
-      this.state.loser_team_id = null;
-      this.state.tiePendingResolution = false;
-      this.state.waitingNextOpponent = false;
-      this.state.waiting_next_opponent = false;
-      this.state.waitingTieNextMatch = true;
-      this.state.waiting_tie_next_match = true;
-      this.state.tieNextMatch = {
-        homeTeamId: nextHomeId,
-        awayTeamId: nextAwayId,
-        homeTeamName: nextHomeTeam.name,
-        awayTeamName: nextAwayTeam.name
+      const matchRecord = {
+        id: Utils.generateUUID(),
+        roundId: round ? round.id : null,
+        matchOrder: this.state.order,
+        date: round ? round.date : Utils.formatDate(new Date()),
+        time: Utils.formatTime(new Date()),
+        dateKey: round ? round.dateKey : Utils.getDateKey(new Date()),
+        homeTeamId: this.state.homeTeamId,
+        homeTeamName: homeTeam ? homeTeam.name : 'Time 1',
+        homeTeamColor: colors[this.state.homeTeamId] || '#3b82f6',
+        awayTeamId: this.state.awayTeamId,
+        awayTeamName: awayTeam ? awayTeam.name : 'Time 2',
+        awayTeamColor: colors[this.state.awayTeamId] || '#ef4444',
+        homeScore: this.state.homeScore,
+        awayScore: this.state.awayScore,
+        winner: winner,
+        loser: loser,
+        isTie: isTie,
+        decisaoAdmin: false,
+        resultText: resultText,
+        durationMinutes: this.state.durationMinutes,
+        durationPlayedFormatted: Utils.formatSeconds(elapsedSeconds),
+        goals: [...this.state.goals],
+        homePlayers: homeTeam ? homeTeam.players : [],
+        awayPlayers: awayTeam ? awayTeam.players : [],
+        createdAt: new Date().toISOString()
       };
 
-      // Persiste estado oficial finalizado no Supabase e Storage antes de emitir matches
-      this.saveFullState();
-      Storage.addMatch(matchRecord);
-      this.render();
-      Utils.toast(`Partida empatada! ${homeTeam ? homeTeam.name : 'Time 1'} e ${awayTeam ? awayTeam.name : 'Time 2'} saem. Próxima partida: ${nextHomeTeam.name} × ${nextAwayTeam.name}!`, 'info', 4500);
-    } else {
-      // REGRA DE VITÓRIA:
-      // O vencedor permanece em campo.
-      // O perdedor sai de campo.
-      // O administrador escolhe o próximo adversário entre os 2 times que estão fora.
-      const winnerName = winner === this.state.homeTeamId ? (homeTeam ? homeTeam.name : 'Time 1') : (awayTeam ? awayTeam.name : 'Time 2');
-      this.state.winnerTeamId = winner;
-      this.state.winner_team_id = winner;
-      this.state.winnerTeamName = winnerName;
-      this.state.winner_team_name = winnerName;
-      this.state.loserTeamId = loser;
-      this.state.loser_team_id = loser;
-      this.state.tiePendingResolution = false;
-      this.state.waitingTieNextMatch = false;
-      this.state.waiting_tie_next_match = false;
-      this.state.waitingNextOpponent = true;
-      this.state.waiting_next_opponent = true;
-      this.state.outsideWaitingTeamIds = Object.keys(teams).filter(id => id !== this.state.homeTeamId && id !== this.state.awayTeamId);
+      Utils.sound.playWhistle();
 
-      // Persiste estado oficial finalizado no Supabase e Storage antes de emitir matches
-      this.saveFullState();
-      Storage.addMatch(matchRecord);
-      this.render();
-      Utils.toast(`Partida finalizada! ${winnerName} venceu e permanece em campo. Escolha o próximo adversário.`, 'success', 4500);
+      if (isTie) {
+        // REGRA DEFINITIVA DE EMPATE:
+        // 1. Ambos os times recebem 1 ponto (já persistido no Storage e Tabela).
+        // 2. Ambos os times saem de campo.
+        // 3. Os dois times que estavam fora entram automaticamente.
+        // 4. A próxima partida é AUTOMATICAMENTE entre os dois times que estavam fora.
+        // 5. NÃO perguntar ao administrador quem permanece e NÃO escolher vencedor.
+        const currentHomeId = this.state.homeTeamId;
+        const currentAwayId = this.state.awayTeamId;
+
+        const allTeamIds = Object.keys(teams).length >= 4 ? Object.keys(teams) : ['time_1', 'time_2', 'time_3', 'time_4'];
+        const outsideTeamIds = allTeamIds.filter(id => id !== currentHomeId && id !== currentAwayId);
+
+        const nextHomeId = outsideTeamIds[0] || 'time_3';
+        const nextAwayId = outsideTeamIds[1] || 'time_4';
+        const nextHomeTeam = teams[nextHomeId] || { name: nextHomeId.replace('time_', 'Time ') };
+        const nextAwayTeam = teams[nextAwayId] || { name: nextAwayId.replace('time_', 'Time ') };
+
+        const nextOrder = this.state.order + 1;
+        const durationMins = this.state.durationMinutes || Storage.getDefaultMatchDurationMinutes() || 7;
+
+        // 1. Prepara a próxima partida no estado oficial como SCHEDULED ('ready')
+        this.state = {
+          ...this.state,
+          order: nextOrder,
+          status: 'ready',
+          isActive: false,
+          isPaused: false,
+          durationMinutes: durationMins,
+          durationSeconds: durationMins * 60,
+          remainingSeconds: durationMins * 60,
+          startedAt: null,
+          pausedAt: null,
+          lastTick: null,
+          homeTeamId: nextHomeId,
+          awayTeamId: nextAwayId,
+          homeTeamName: nextHomeTeam.name,
+          awayTeamName: nextAwayTeam.name,
+          homeScore: 0,
+          awayScore: 0,
+          goals: [],
+          winnerTeamId: null,
+          winner_team_id: null,
+          winnerTeamName: null,
+          winner_team_name: null,
+          loserTeamId: null,
+          loser_team_id: null,
+          isTie: true,
+          tiePendingResolution: false,
+          waitingNextOpponent: false,
+          waiting_next_opponent: false,
+          waitingTieNextMatch: true,
+          waiting_tie_next_match: true,
+          tieNextMatch: {
+            homeTeamId: nextHomeId,
+            awayTeamId: nextAwayId,
+            homeTeamName: nextHomeTeam.name,
+            awayTeamName: nextAwayTeam.name
+          },
+          outsideWaitingTeamIds: [currentHomeId, currentAwayId],
+          decisaoAdmin: false,
+          lastMatchSummary: {
+            order: matchRecord.matchOrder,
+            homeTeamName: matchRecord.homeTeamName,
+            awayTeamName: matchRecord.awayTeamName,
+            homeScore: matchRecord.homeScore,
+            awayScore: matchRecord.awayScore,
+            resultText: resultText,
+            winnerTeamId: null,
+            winnerTeamName: null,
+            isTie: true
+          }
+        };
+
+        // 2. Persiste a próxima partida preparada no Supabase (partida_ao_vivo) e no LocalStorage
+        this.saveFullState();
+
+        // 3. Persiste a partida finalizada no histórico oficial
+        Storage.addMatch(matchRecord);
+
+        // 4. Renderiza e emite notificação
+        this.render();
+        Utils.toast(`Partida empatada! ${homeTeam ? homeTeam.name : 'Time 1'} e ${awayTeam ? awayTeam.name : 'Time 2'} saem. Próxima partida: ${nextHomeTeam.name} × ${nextAwayTeam.name}!`, 'info', 4500);
+      } else {
+        // REGRA DE VITÓRIA:
+        // O vencedor permanece em campo.
+        // O perdedor sai de campo.
+        // O administrador escolhe o próximo adversário entre os 2 times que estão fora.
+        const winnerName = winner === this.state.homeTeamId ? (homeTeam ? homeTeam.name : 'Time 1') : (awayTeam ? awayTeam.name : 'Time 2');
+        this.state.status = 'finished';
+        this.state.isActive = false;
+        this.state.isPaused = false;
+        this.state.isTie = false;
+        this.state.winnerTeamId = winner;
+        this.state.winner_team_id = winner;
+        this.state.winnerTeamName = winnerName;
+        this.state.winner_team_name = winnerName;
+        this.state.loserTeamId = loser;
+        this.state.loser_team_id = loser;
+        this.state.tiePendingResolution = false;
+        this.state.waitingTieNextMatch = false;
+        this.state.waiting_tie_next_match = false;
+        this.state.waitingNextOpponent = true;
+        this.state.waiting_next_opponent = true;
+        this.state.outsideWaitingTeamIds = Object.keys(teams).filter(id => id !== this.state.homeTeamId && id !== this.state.awayTeamId);
+        this.state.lastMatchSummary = {
+          order: this.state.order,
+          homeTeamName: matchRecord.homeTeamName,
+          awayTeamName: matchRecord.awayTeamName,
+          homeScore: matchRecord.homeScore,
+          awayScore: matchRecord.awayScore,
+          resultText: resultText,
+          winnerTeamId: winner,
+          winnerTeamName: winnerName
+        };
+
+        // Persiste estado oficial finalizado no Supabase e Storage antes de emitir matches
+        this.saveFullState();
+        Storage.addMatch(matchRecord);
+        this.render();
+        Utils.toast(`Partida finalizada! ${winnerName} venceu e permanece em campo. Escolha o próximo adversário.`, 'success', 4500);
+      }
+    } finally {
+      this._isTransitioning = false;
     }
   },
 
@@ -1093,8 +1371,23 @@ export const Partidas = {
   // --------------------------------------------------------------------------
   criarProximaPartidaAposEmpate(autoStart = false) {
     Storage.assertAdmin('Criar próxima partida após empate');
+    const round = Storage.getCurrentRound();
+    if (round && round.status === 'FINISHED') {
+      Utils.toast('Esta noite já foi encerrada. Não é possível iniciar uma nova partida.', 'warning');
+      return;
+    }
     if (!this.state.tieNextMatch) {
       Utils.toast('Nenhum confronto de empate configurado.', 'warning');
+      return;
+    }
+
+    // Proteção de idempotência: se a partida atual já foi preparada em status ready para o confronto
+    if (this.state.status === 'ready' && this.state.tieNextMatch &&
+        this.state.homeTeamId === this.state.tieNextMatch.homeTeamId &&
+        this.state.awayTeamId === this.state.tieNextMatch.awayTeamId) {
+      if (autoStart) {
+        this.iniciarProximaPartidaAposEmpate();
+      }
       return;
     }
 
@@ -1144,6 +1437,18 @@ export const Partidas = {
   },
 
   iniciarProximaPartidaAposEmpate() {
+    const round = Storage.getCurrentRound();
+    if (round && round.status === 'FINISHED') {
+      Utils.toast('Esta noite já foi encerrada. Não é possível iniciar uma nova partida.', 'warning');
+      return;
+    }
+    if (this.state.status === 'ready') {
+      this.state.waitingTieNextMatch = false;
+      this.state.waiting_tie_next_match = false;
+      this.state.isTie = false;
+      this.startOrResumeMatch();
+      return;
+    }
     this.criarProximaPartidaAposEmpate(true);
   },
 
@@ -1160,6 +1465,11 @@ export const Partidas = {
   // --------------------------------------------------------------------------
   selecionarProximoAdversario(opponentTeamId) {
     Storage.assertAdmin('Escolher próximo adversário');
+    const round = Storage.getCurrentRound();
+    if (round && round.status === 'FINISHED') {
+      Utils.toast('Esta noite já foi encerrada. Não é possível iniciar uma nova partida.', 'warning');
+      return;
+    }
 
     // Validação resiliente do vencedor da partida oficial:
     // 1. this.state.winnerTeamId ou this.state.winner_team_id
@@ -1265,8 +1575,18 @@ export const Partidas = {
       return;
     }
 
-    if (this.state.status === 'running' || this.state.status === 'paused') {
-      Utils.toast('Finalize a partida atual antes de encerrar a noite.', 'warning', 4500);
+    const live = Storage.getLiveMatch();
+    const liveStatus = (live && live.status) || this.state.status;
+    const isRunning = liveStatus === 'running' || (live && live.isActive && !live.isPaused) || (this.state.status === 'running' && !this.state.isPaused);
+    const isPaused = liveStatus === 'paused' || (live && live.isPaused) || this.state.status === 'paused';
+
+    if (isRunning) {
+      Utils.toast('Finalize a partida em andamento antes de encerrar a noite.', 'warning', 4500);
+      return;
+    }
+
+    if (isPaused) {
+      Utils.toast('Retome e finalize a partida antes de encerrar a noite.', 'warning', 4500);
       return;
     }
 
@@ -1430,29 +1750,50 @@ export const Partidas = {
     Utils.openModal(modalId);
   },
 
-  executarEncerramentoNoite(championId, championName, championPlayers) {
+  async executarEncerramentoNoite(championId, championName, championPlayers) {
     try {
       const round = Storage.getCurrentRound();
+      if (!round) {
+        Utils.toast('Nenhuma rodada ativa encontrada.', 'warning');
+        return;
+      }
+      if (round.status === 'FINISHED') {
+        Utils.toast('Esta noite já foi encerrada.', 'info');
+        return;
+      }
+
       let matches = Storage.getMatches().filter(m => round && m.roundId === round.id);
       if (matches.length === 0 && round) {
         matches = Storage.getMatches().filter(m => !m.roundId && m.dateKey === round.dateKey);
       }
       const standings = Tabela.calcularTabela(matches, null, round);
 
-      Storage.finalizeNight({
+      await Storage.endNight({
         championTeamId: championId,
         championTeamName: championName,
         capaPlayers: championPlayers,
-        standingsSnapshot: standings
+        standings: standings
       });
+
+      this.state.status = 'finished';
+      this.state.isActive = false;
+      this.state.isPaused = false;
+      this.state.waitingNextOpponent = false;
+      this.state.waiting_next_opponent = false;
+      this.state.waitingTieNextMatch = false;
+      this.state.waiting_tie_next_match = false;
+      if (this.timerInterval) {
+        clearInterval(this.timerInterval);
+        this.timerInterval = null;
+      }
+      if (this.publicTickerInterval) {
+        clearInterval(this.publicTickerInterval);
+        this.publicTickerInterval = null;
+      }
 
       Utils.sound.playGoal();
       Utils.toast(`Noite encerrada com sucesso! Campeão: ${championName}. 5 Capas distribuídas!`, 'success', 5000);
       this.render();
-
-      if (window.App) {
-        window.App.navigateTo('historico');
-      }
     } catch (err) {
       Utils.toast(err.message, 'error', 4000);
     }
@@ -1539,12 +1880,161 @@ export const Partidas = {
     if (emptyStateEl) emptyStateEl.style.display = 'none';
     if (activeStateEl) activeStateEl.style.display = 'block';
 
+    const round = Storage.getCurrentRound();
+    const isRoundDone = round && round.status === 'FINISHED';
+
+    if (isRoundDone) {
+      this.renderNightFinishedUI(round);
+      return;
+    }
+
+    this.hideNightFinishedUI();
     this.renderQuemGanhaFicaBanner();
     this.renderScoreboard();
     this.updateTimerDisplay();
     this.renderControls();
     this.renderGoalsList();
     this.renderNightEndSection();
+
+    if (this.state.status === 'running' && !this.state.isPaused && !this.timerInterval) {
+      if (this.calculateCurrentRemainingSeconds() > 0) {
+        this.startTimerLoop();
+      }
+    }
+  },
+
+  renderNightFinishedUI(round) {
+    const activeStateEl = document.getElementById('partida-active-state');
+    if (!activeStateEl) return;
+
+    // Oculta os blocos de partida ativa para manter a tela limpa
+    const setupEl = activeStateEl.querySelector ? activeStateEl.querySelector('.match-setup') : null;
+    const sbEl = activeStateEl.querySelector ? activeStateEl.querySelector('.scoreboard') : null;
+    const timelineEl = activeStateEl.querySelector ? (activeStateEl.querySelector('.card:has(#match-goals-timeline)') || document.getElementById('match-goals-timeline')?.closest?.('.card')) : null;
+    const bannerEl = document.getElementById('match-quem-ganha-fica-banner');
+    const nightEndSecEl = document.getElementById('night-end-control-section');
+
+    if (setupEl) setupEl.style.display = 'none';
+    if (sbEl) sbEl.style.display = 'none';
+    if (timelineEl) timelineEl.style.display = 'none';
+    if (bannerEl) {
+      bannerEl.innerHTML = '';
+      bannerEl.style.display = 'none';
+    }
+    if (nightEndSecEl) {
+      nightEndSecEl.innerHTML = '';
+      nightEndSecEl.style.display = 'none';
+    }
+
+    // Identificação do campeão da noite
+    const teams = Storage.getTeams() || (round && round.teams ? round.teams : {}) || {};
+    const colors = Storage.getTeamColors();
+    const champId = round.campeaoTimeId;
+    let champName = round.campeaoTimeNome;
+    if (!champName && champId && teams[champId]) {
+      champName = teams[champId].name;
+    }
+    if (!champName) {
+      champName = 'Time 1';
+    }
+    const champColor = (champId && colors[champId]) ? colors[champId] : '#eab308';
+
+    let finishedContainer = document.getElementById('night-finished-container');
+    if (!finishedContainer) {
+      finishedContainer = document.createElement('div');
+      finishedContainer.id = 'night-finished-container';
+      if (activeStateEl.insertBefore && activeStateEl.firstChild) {
+        activeStateEl.insertBefore(finishedContainer, activeStateEl.firstChild);
+      } else if (activeStateEl.appendChild) {
+        activeStateEl.appendChild(finishedContainer);
+      }
+    }
+    finishedContainer.style.display = 'block';
+
+    finishedContainer.innerHTML = `
+      <div class="card night-finished-card" id="night-finished-summary-card" style="margin-bottom: 1.25rem; border-left: 4px solid #eab308; background: rgba(234, 179, 8, 0.06); padding: 1.25rem;">
+        <div style="display: flex; align-items: center; gap: 0.85rem;">
+          <svg class="i" style="width: 32px; height: 32px; fill: #eab308; flex-shrink: 0;" aria-hidden="true">
+            <use href="#i-crown" />
+          </svg>
+          <div>
+            <div style="font-size: 0.8rem; font-weight: 800; color: #eab308; text-transform: uppercase; letter-spacing: 1px;">
+              NOITE ENCERRADA
+            </div>
+            <div style="font-size: 1.25rem; font-weight: 800; font-family: 'Barlow Condensed', sans-serif; margin: 0.2rem 0; color: var(--text-main, #fff);">
+              Campeão: <span style="color: ${champColor}; font-weight: 800;">${champName.toUpperCase()}</span>
+            </div>
+            <div style="font-size: 0.88rem; color: var(--text-muted);">
+              Os 5 atletas receberam +1 Capa.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="night-finished-actions-card" style="padding: 1.25rem; background: var(--surface-2); border: 1px solid var(--border);">
+        <div style="display: flex; flex-direction: column; gap: 0.85rem;">
+          <p style="font-size: 0.88rem; color: var(--text-muted); margin: 0; line-height: 1.4;">
+            Todas as partidas desta noite foram finalizadas. Consulte os detalhes e súmulas na seção <strong>Histórico</strong> ou a classificação final na <strong>Tabela</strong>.
+          </p>
+          <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+            <button type="button" class="btn btn-primary btn-sm" id="btn-night-finished-history" style="display: inline-flex; align-items: center; gap: 0.5rem;">
+              <svg class="i i-sm" aria-hidden="true"><use href="#i-history" /></svg>
+              <span>Ver Histórico de Partidas</span>
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-night-finished-table" style="display: inline-flex; align-items: center; gap: 0.5rem;">
+              <svg class="i i-sm" aria-hidden="true"><use href="#i-table" /></svg>
+              <span>Ver Tabela Final</span>
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-night-finished-rankings" style="display: inline-flex; align-items: center; gap: 0.5rem;">
+              <svg class="i i-sm" aria-hidden="true"><use href="#i-trophy" /></svg>
+              <span>Ver Rankings</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const btnHist = finishedContainer.querySelector ? finishedContainer.querySelector('#btn-night-finished-history') : null;
+    if (btnHist) {
+      btnHist.onclick = () => {
+        if (window.App) window.App.navigateTo('historico');
+      };
+    }
+    const btnTab = finishedContainer.querySelector ? finishedContainer.querySelector('#btn-night-finished-table') : null;
+    if (btnTab) {
+      btnTab.onclick = () => {
+        if (window.App) window.App.navigateTo('tabela');
+      };
+    }
+    const btnRank = finishedContainer.querySelector ? finishedContainer.querySelector('#btn-night-finished-rankings') : null;
+    if (btnRank) {
+      btnRank.onclick = () => {
+        if (window.App) window.App.navigateTo('rankings');
+      };
+    }
+  },
+
+  hideNightFinishedUI() {
+    const finishedContainer = document.getElementById('night-finished-container');
+    if (finishedContainer) {
+      finishedContainer.style.display = 'none';
+      finishedContainer.innerHTML = '';
+    }
+
+    const activeStateEl = document.getElementById('partida-active-state');
+    if (!activeStateEl) return;
+
+    const setupEl = activeStateEl.querySelector ? activeStateEl.querySelector('.match-setup') : null;
+    const sbEl = activeStateEl.querySelector ? activeStateEl.querySelector('.scoreboard') : null;
+    const timelineEl = activeStateEl.querySelector ? (activeStateEl.querySelector('.card:has(#match-goals-timeline)') || document.getElementById('match-goals-timeline')?.closest?.('.card')) : null;
+    const bannerEl = document.getElementById('match-quem-ganha-fica-banner');
+    const nightEndSecEl = document.getElementById('night-end-control-section');
+
+    if (setupEl) setupEl.style.display = '';
+    if (sbEl) sbEl.style.display = '';
+    if (timelineEl) timelineEl.style.display = '';
+    if (bannerEl) bannerEl.style.display = '';
+    if (nightEndSecEl) nightEndSecEl.style.display = '';
   },
 
   renderQuemGanhaFicaBanner() {
@@ -1558,6 +2048,12 @@ export const Partidas = {
       }
     }
 
+    const round = Storage.getCurrentRound();
+    if (round && round.status === 'FINISHED') {
+      bannerEl.innerHTML = '';
+      return;
+    }
+
     const teams = Storage.getTeams() || {};
     const colors = Storage.getTeamColors();
     const isPublic = Storage.isPublicViewer();
@@ -1569,11 +2065,16 @@ export const Partidas = {
     // CASO 1: PARTIDA FINALIZADA EM EMPATE (REGRA DEFINITIVA)
     if (this.state.waitingTieNextMatch && this.state.tieNextMatch) {
       const summary = this.state.lastMatchSummary || {
-        homeScore: this.state.homeScore,
-        awayScore: this.state.awayScore,
-        homeTeamName: homeTeam.name,
-        awayTeamName: awayTeam.name
+        homeScore: 0,
+        awayScore: 0,
+        homeTeamName: 'Time 1',
+        awayTeamName: 'Time 2'
       };
+      const prevHomeId = this.state.outsideWaitingTeamIds?.[0] || 'time_1';
+      const prevAwayId = this.state.outsideWaitingTeamIds?.[1] || 'time_2';
+      const prevHomeColor = colors[prevHomeId] || '#3b82f6';
+      const prevAwayColor = colors[prevAwayId] || '#ef4444';
+
       const nextHomeTeam = teams[this.state.tieNextMatch.homeTeamId] || { name: 'Time 3' };
       const nextAwayTeam = teams[this.state.tieNextMatch.awayTeamId] || { name: 'Time 4' };
       const nextHomeColor = colors[this.state.tieNextMatch.homeTeamId] || '#16a34a';
@@ -1586,9 +2087,9 @@ export const Partidas = {
           </div>
 
           <div style="font-size: 1.5rem; font-weight: 800; font-family: 'Barlow Condensed', sans-serif; display: flex; align-items: center; justify-content: center; gap: 0.75rem; margin-bottom: 0.5rem;">
-            <span style="color: ${homeColor};">${summary.homeTeamName.toUpperCase()}</span>
+            <span style="color: ${prevHomeColor};">${summary.homeTeamName.toUpperCase()}</span>
             <span style="background: var(--bg-card); padding: 2px 10px; border-radius: 6px; border: 1px solid var(--border);">${summary.homeScore} × ${summary.awayScore}</span>
-            <span style="color: ${awayColor};">${summary.awayTeamName.toUpperCase()}</span>
+            <span style="color: ${prevAwayColor};">${summary.awayTeamName.toUpperCase()}</span>
           </div>
 
           <div style="display: inline-block; padding: 4px 14px; background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 20px; font-weight: 800; font-size: 0.8rem; letter-spacing: 0.5px; margin-bottom: 1rem;">
@@ -1597,10 +2098,10 @@ export const Partidas = {
 
           <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; font-size: 0.85rem; font-weight: 700;">
             <div style="padding: 4px 10px; background: rgba(239, 68, 68, 0.1); border-radius: 4px; color: #ef4444;">
-              <span style="color: ${homeColor};">${summary.homeTeamName.toUpperCase()}</span> SAI DE CAMPO
+              <span style="color: ${prevHomeColor};">${summary.homeTeamName.toUpperCase()}</span> SAI DE CAMPO
             </div>
             <div style="padding: 4px 10px; background: rgba(239, 68, 68, 0.1); border-radius: 4px; color: #ef4444;">
-              <span style="color: ${awayColor};">${summary.awayTeamName.toUpperCase()}</span> SAI DE CAMPO
+              <span style="color: ${prevAwayColor};">${summary.awayTeamName.toUpperCase()}</span> SAI DE CAMPO
             </div>
           </div>
 
@@ -1615,7 +2116,7 @@ export const Partidas = {
             </div>
 
             <div style="font-size: 0.85rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 0.75rem;">
-              PRÓXIMA PARTIDA
+              PRÓXIMA PARTIDA PREPARADA (AGUARDANDO INÍCIO)
             </div>
 
             ${isPublic ? `
@@ -1798,8 +2299,24 @@ export const Partidas = {
     if (nameHomeEl) nameHomeEl.textContent = homeTeam.name;
     if (nameAwayEl) nameAwayEl.textContent = awayTeam.name;
 
-    if (scoreHomeEl) scoreHomeEl.textContent = this.state.homeScore;
-    if (scoreAwayEl) scoreAwayEl.textContent = this.state.awayScore;
+    if (scoreHomeEl) {
+      if (this._prevHomeScore !== undefined && this._prevHomeScore !== this.state.homeScore) {
+        scoreHomeEl.classList.remove('score-pop');
+        if (typeof scoreHomeEl.offsetWidth === 'number') void scoreHomeEl.offsetWidth;
+        scoreHomeEl.classList.add('score-pop');
+      }
+      scoreHomeEl.textContent = this.state.homeScore;
+    }
+    if (scoreAwayEl) {
+      if (this._prevAwayScore !== undefined && this._prevAwayScore !== this.state.awayScore) {
+        scoreAwayEl.classList.remove('score-pop');
+        if (typeof scoreAwayEl.offsetWidth === 'number') void scoreAwayEl.offsetWidth;
+        scoreAwayEl.classList.add('score-pop');
+      }
+      scoreAwayEl.textContent = this.state.awayScore;
+    }
+    this._prevHomeScore = this.state.homeScore;
+    this._prevAwayScore = this.state.awayScore;
 
     if (blockHome) blockHome.style.borderColor = homeColor;
     if (badgeHome) {
@@ -1817,15 +2334,17 @@ export const Partidas = {
     const btnGoalAway = document.getElementById('btn-add-goal-away');
 
     if (btnGoalHome) {
-      btnGoalHome.innerHTML = `<span>+ GOL ${homeTeam.name.toUpperCase()}</span>`;
+      btnGoalHome.innerHTML = `<svg class="i i-sm" aria-hidden="true" style="margin-right: 4px;"><use href="#i-ball"/></svg><span>+ GOL ${homeTeam.name.toUpperCase()}</span>`;
       btnGoalHome.style.borderColor = homeColor;
       btnGoalHome.disabled = this.state.status === 'finished';
     }
     if (btnGoalAway) {
-      btnGoalAway.innerHTML = `<span>+ GOL ${awayTeam.name.toUpperCase()}</span>`;
+      btnGoalAway.innerHTML = `<svg class="i i-sm" aria-hidden="true" style="margin-right: 4px;"><use href="#i-ball"/></svg><span>+ GOL ${awayTeam.name.toUpperCase()}</span>`;
       btnGoalAway.style.borderColor = awayColor;
       btnGoalAway.disabled = this.state.status === 'finished';
     }
+
+    this.renderScorersSummary(homeTeam, awayTeam, homeColor, awayColor);
 
     const durationSelect = document.getElementById('match-duration-select');
     if (durationSelect && this.state.durationMinutes) {
@@ -1846,6 +2365,55 @@ export const Partidas = {
     }
   },
 
+  renderScorersSummary(homeTeam, awayTeam, homeColor, awayColor) {
+    if (typeof document === 'undefined') return;
+    const summaryEl = document.getElementById('scoreboard-scorers-summary');
+    const homeScorersEl = document.getElementById('scoreboard-scorers-home');
+    const awayScorersEl = document.getElementById('scoreboard-scorers-away');
+    if (!summaryEl || !homeScorersEl || !awayScorersEl) return;
+
+    const goals = this.state.goals || [];
+    if (goals.length === 0) {
+      summaryEl.style.display = 'none';
+      homeScorersEl.innerHTML = '';
+      awayScorersEl.innerHTML = '';
+      return;
+    }
+
+    const homeGoals = goals.filter(g => g.teamId === this.state.homeTeamId);
+    const awayGoals = goals.filter(g => g.teamId === this.state.awayTeamId);
+
+    const groupGoals = (list) => {
+      const counts = {};
+      list.forEach(g => {
+        const name = g.playerName || 'Atleta';
+        counts[name] = (counts[name] || 0) + 1;
+      });
+      return Object.entries(counts).map(([name, count]) => ({ name, count }));
+    };
+
+    const homeList = groupGoals(homeGoals);
+    const awayList = groupGoals(awayGoals);
+
+    summaryEl.style.display = 'flex';
+
+    homeScorersEl.innerHTML = homeList.map(item => `
+      <span class="sb-scorer-badge" style="border-color: ${homeColor}40;">
+        <svg class="i i-xs" aria-hidden="true" style="color: ${homeColor};"><use href="#i-ball"/></svg>
+        <span class="sb-scorer-name">${item.name}</span>
+        ${item.count > 1 ? `<span class="sb-scorer-count" style="background: ${homeColor}30; color: #fff;">${item.count}</span>` : ''}
+      </span>
+    `).join('');
+
+    awayScorersEl.innerHTML = awayList.map(item => `
+      <span class="sb-scorer-badge" style="border-color: ${awayColor}40;">
+        <svg class="i i-xs" aria-hidden="true" style="color: ${awayColor};"><use href="#i-ball"/></svg>
+        <span class="sb-scorer-name">${item.name}</span>
+        ${item.count > 1 ? `<span class="sb-scorer-count" style="background: ${awayColor}30; color: #fff;">${item.count}</span>` : ''}
+      </span>
+    `).join('');
+  },
+
   renderControls() {
     const btnStart = document.getElementById('btn-timer-start');
     const btnPause = document.getElementById('btn-timer-pause');
@@ -1853,8 +2421,10 @@ export const Partidas = {
     const btnReset = document.getElementById('btn-timer-reset');
     const statusTag = document.getElementById('match-status-tag');
     const isPublic = Storage.isPublicViewer();
+    const round = Storage.getCurrentRound();
+    const isRoundDone = round && round.status === 'FINISHED';
 
-    if (isPublic) {
+    if (isPublic || isRoundDone) {
       if (btnStart) btnStart.style.display = 'none';
       if (btnPause) btnPause.style.display = 'none';
       if (btnFinish) btnFinish.style.display = 'none';
@@ -1866,7 +2436,10 @@ export const Partidas = {
       if (btnGoalAway) btnGoalAway.style.display = 'none';
 
       if (statusTag) {
-        if (this.state.status === 'running') {
+        if (isRoundDone) {
+          statusTag.textContent = 'NOITE ENCERRADA';
+          statusTag.className = 'match-status-tag status-finished';
+        } else if (this.state.status === 'running') {
           statusTag.textContent = 'Em Andamento';
           statusTag.className = 'match-status-tag status-live';
         } else if (this.state.status === 'paused') {
@@ -1890,17 +2463,23 @@ export const Partidas = {
       btnPause.style.display = 'inline-flex';
       btnPause.innerHTML = `<svg class="i i-sm" aria-hidden="true" style="margin-right:4px;"><use href="#i-flag"/></svg><span>PAUSAR</span>`;
       btnFinish.style.display = 'inline-flex';
-      if (btnReset) btnReset.style.display = 'inline-flex';
+      if (btnReset) {
+        btnReset.style.display = 'inline-flex';
+        btnReset.innerHTML = `<svg class="i i-sm" aria-hidden="true"><use href="#i-rotate"/></svg><span class="btn-reset-text">REINICIAR</span>`;
+      }
       if (statusTag) {
         statusTag.textContent = 'Em Andamento';
         statusTag.className = 'match-status-tag status-live';
       }
     } else if (this.state.status === 'paused') {
       btnStart.style.display = 'inline-flex';
-      btnStart.innerHTML = `<svg class="i i-sm" aria-hidden="true" style="margin-right:4px;"><use href="#i-play"/></svg><span>CONTINUAR</span>`;
+      btnStart.innerHTML = `<svg class="i i-sm" aria-hidden="true" style="margin-right:4px;"><use href="#i-play"/></svg><span>RETOMAR</span>`;
       btnPause.style.display = 'none';
       btnFinish.style.display = 'inline-flex';
-      if (btnReset) btnReset.style.display = 'inline-flex';
+      if (btnReset) {
+        btnReset.style.display = 'inline-flex';
+        btnReset.innerHTML = `<svg class="i i-sm" aria-hidden="true"><use href="#i-rotate"/></svg><span class="btn-reset-text">REINICIAR</span>`;
+      }
       if (statusTag) {
         statusTag.textContent = 'PAUSADA';
         statusTag.className = 'match-status-tag status-paused';
@@ -1992,19 +2571,8 @@ export const Partidas = {
     const canEndNight = matches.length > 0 && this.state.status !== 'running' && this.state.status !== 'paused';
 
     if (isRoundDone) {
-      sectionEl.innerHTML = `
-        <div class="card night-finished-card" style="margin-top: 1.5rem; border-left: 4px solid #eab308; background: rgba(234, 179, 8, 0.05); padding: 1.25rem;">
-          <div style="display: flex; align-items: center; gap: 0.75rem;">
-            <svg class="i" style="width: 28px; height: 28px; fill: #eab308;" aria-hidden="true"><use href="#i-crown"/></svg>
-            <div>
-              <h3 style="font-size: 1.15rem; font-weight: 700; color: #eab308;">NOITE ENCERRADA</h3>
-              <p class="text-muted" style="font-size: 0.88rem; margin: 0.2rem 0;">
-                Campeão: <strong>${round.campeaoTimeNome || 'Time Campeão'}</strong>. Os 5 atletas receberam +1 Capa.
-              </p>
-            </div>
-          </div>
-        </div>
-      `;
+      sectionEl.innerHTML = '';
+      sectionEl.style.display = 'none';
       return;
     }
 

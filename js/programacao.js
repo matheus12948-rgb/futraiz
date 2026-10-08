@@ -250,6 +250,12 @@ export const Programacao = {
 
   iniciarNoite() {
     Storage.assertAdmin('Iniciar noite');
+    const round = Storage.getCurrentRound();
+    if (round && round.status === 'FINISHED') {
+      Utils.toast('Esta noite já foi encerrada. Não é possível iniciar uma nova partida.', 'warning');
+      return;
+    }
+
     const teams = Storage.getTeams();
     if (!teams) {
       Utils.toast('Realize o sorteio dos 4 times antes de iniciar a noite.', 'warning');

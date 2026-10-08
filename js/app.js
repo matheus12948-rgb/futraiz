@@ -14,6 +14,7 @@ import { Tabela } from './tabela.js';
 import { Rankings } from './rankings.js';
 import { Historico } from './historico.js';
 import { Configuracoes } from './configuracoes.js';
+import { Dashboard } from './dashboard.js';
 
 export const App = {
   currentScreen: 'landing',
@@ -23,6 +24,7 @@ export const App = {
 
     if (typeof window !== 'undefined') {
       window.App = this;
+      window.Dashboard = Dashboard;
       window.Jogadores = Jogadores;
       window.Sorteio = Sorteio;
       window.Programacao = Programacao;
@@ -51,6 +53,7 @@ export const App = {
     this.safeInit('Rankings', () => Rankings.init());
     this.safeInit('Historico', () => Historico.init());
     this.safeInit('Configuracoes', () => Configuracoes.init());
+    this.safeInit('Dashboard', () => Dashboard.init());
 
     Storage.onChange((type) => {
       if (type === 'selectedPlayers') {
@@ -208,23 +211,12 @@ export const App = {
   },
 
   bindGlobalEvents() {
-    // Reset Geral dos dados do futebol ativo (Apenas Admin)
+    // Reset Geral dos dados operacionais do futebol ativo (Apenas Admin)
     const btnReset = document.getElementById('btn-reset-data');
     if (btnReset) {
       btnReset.addEventListener('click', (e) => {
         e.preventDefault();
-        Storage.assertAdmin('Resetar dados do futebol');
-        Utils.showDoubleConfirm({
-          title: 'Resetar Dados do Futebol',
-          step1Message: `Atenção: Isso irá apagar os jogadores, rodadas, histórico e rankings deste futebol (${Storage.currentFutebol.nome}).`,
-          step2Message: 'Confirmação final: Você tem certeza ABSOLUTA que deseja zerar os dados deste futebol? Esta ação não pode ser desfeita.',
-          onConfirm: () => {
-            Storage.resetAll();
-            Utils.toast('Dados do futebol resetados.', 'info');
-            this.navigateTo('dashboard');
-            this.refreshAll();
-          }
-        });
+        Configuracoes.confirmarZerarTudo();
       });
     }
 
@@ -640,262 +632,8 @@ export const App = {
   },
 
   renderDashboard() {
-    const players = Storage.getPlayers();
-    const teams = Storage.getTeams();
-    const currentRound = Storage.getCurrentRound();
-    const matches = Storage.getMatches() || [];
-    let roundMatches = [];
-    if (currentRound) {
-      roundMatches = matches.filter(m => m.roundId === currentRound.id);
-      if (roundMatches.length === 0 && currentRound.status !== 'FINISHED') {
-        const legacyMatches = matches.filter(m => !m.roundId && m.dateKey === currentRound.dateKey);
-        if (legacyMatches.length > 0) roundMatches = legacyMatches;
-      }
-    }
-
-    let todayGoals = 0;
-    roundMatches.forEach(m => {
-      todayGoals += ((Number(m.homeScore) || 0) + (Number(m.awayScore) || 0));
-    });
-
-    const standings = Tabela.calcularTabelaRodada();
-    const leader = (standings.length > 0 && standings[0].j > 0) ? standings[0].name : 'Nenhum jogo';
-
-    const artilharia = Rankings.getArtilhariaData();
-    const topScorerText = artilharia.length > 0 ? `${artilharia[0].name} (${artilharia[0].goals} gols)` : 'Nenhum gol';
-
-    const capaList = Rankings.getCapaData();
-    const topCapaText = capaList.length > 0 ? `${capaList[0].name} (${capaList[0].capas} ${capaList[0].capas === 1 ? 'Capa' : 'Capas'})` : 'Nenhuma Capa';
-
-    const pEl = document.getElementById('dash-stat-players');
-    const mEl = document.getElementById('dash-stat-matches-today');
-    const gEl = document.getElementById('dash-stat-goals-today');
-    const lEl = document.getElementById('dash-stat-leader');
-    const sEl = document.getElementById('dash-stat-top-scorer');
-    const cEl = document.getElementById('dash-stat-top-capa');
-
-    if (pEl) pEl.textContent = players.length;
-    if (mEl) mEl.textContent = roundMatches.length;
-    if (gEl) gEl.textContent = todayGoals;
-    if (lEl) lEl.textContent = leader;
-    if (sEl) sEl.textContent = topScorerText;
-    if (cEl) cEl.textContent = topCapaText;
-
-    // Partida ao vivo dominante no Dashboard
-    const liveBox = document.getElementById('dash-live-match-box');
-    const liveMatch = Storage.getCurrentMatch();
-    if (liveBox) {
-      if (liveMatch && (liveMatch.status === 'running' || liveMatch.status === 'paused' || liveMatch.isActive)) {
-        const isPaused = liveMatch.status === 'paused';
-        const statusText = isPaused ? 'PAUSADO' : 'EM ANDAMENTO';
-        const badgeClass = isPaused ? 'status-paused' : 'status-live';
-        const formattedTimer = Utils.formatSeconds(liveMatch.remainingSeconds || 0);
-
-        liveBox.style.display = 'block';
-        liveBox.innerHTML = `
-          <div class="dash-live-card">
-            <div class="dash-live-head">
-              <div class="dash-live-tag">
-                <span class="live-dot-pulse"></span>
-                <span>PARTIDA AO VIVO</span>
-              </div>
-              <span class="badge ${badgeClass}">${statusText}</span>
-            </div>
-            <div class="dash-live-matchup">
-              <div class="dash-live-team left">
-                <span class="dash-live-name">${liveMatch.homeTeamName || 'TIME 1'}</span>
-              </div>
-              <div class="dash-live-score-wrap">
-                <span class="dash-live-score">${liveMatch.homeScore || 0}</span>
-                <span class="dash-live-sep">—</span>
-                <span class="dash-live-score">${liveMatch.awayScore || 0}</span>
-              </div>
-              <div class="dash-live-team right">
-                <span class="dash-live-name">${liveMatch.awayTeamName || 'TIME 2'}</span>
-              </div>
-            </div>
-            <div class="dash-live-foot">
-              <span class="dash-live-timer">${formattedTimer}</span>
-              <button type="button" class="btn btn-primary btn-sm" id="btn-dash-control-live">
-                <span>CONTROLAR PARTIDA</span>
-              </button>
-            </div>
-          </div>
-        `;
-        const btnCtrl = document.getElementById('btn-dash-control-live');
-        if (btnCtrl) {
-          btnCtrl.onclick = () => this.navigateTo('partida');
-        }
-      } else {
-        liveBox.style.display = 'none';
-        liveBox.innerHTML = '';
-      }
-    }
-
-    // Resumo da Classificação no Dashboard
-    const standingsBody = document.getElementById('dash-standings-body');
-    if (standingsBody) {
-      if (standings && standings.length > 0) {
-        standingsBody.innerHTML = `
-          <div class="table-responsive" style="overflow-x: auto;">
-            <table class="tabela-standings" style="width: 100%; font-size: 0.85rem; border-collapse: collapse;">
-              <thead>
-                <tr style="border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.08)); text-align: left;">
-                  <th style="padding: 6px 8px;">POS</th>
-                  <th style="padding: 6px 8px;">TIME</th>
-                  <th style="padding: 6px 8px; text-align: center;">J</th>
-                  <th style="padding: 6px 8px; text-align: center;">V</th>
-                  <th style="padding: 6px 8px; text-align: center;">E</th>
-                  <th style="padding: 6px 8px; text-align: center;">D</th>
-                  <th style="padding: 6px 8px; text-align: center;">SG</th>
-                  <th style="padding: 6px 8px; text-align: center;">PTS</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${standings.map((t, idx) => `
-                  <tr style="border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.04));">
-                    <td style="padding: 6px 8px;"><strong>${idx + 1}º</strong></td>
-                    <td style="padding: 6px 8px;"><strong>${t.name}</strong></td>
-                    <td style="padding: 6px 8px; text-align: center;">${t.j}</td>
-                    <td style="padding: 6px 8px; text-align: center;">${t.v}</td>
-                    <td style="padding: 6px 8px; text-align: center;">${t.e}</td>
-                    <td style="padding: 6px 8px; text-align: center;">${t.d}</td>
-                    <td style="padding: 6px 8px; text-align: center;">${t.sg > 0 ? `+${t.sg}` : t.sg}</td>
-                    <td style="padding: 6px 8px; text-align: center;"><strong>${t.pts}</strong></td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
-        `;
-      } else {
-        standingsBody.innerHTML = `
-          <p class="text-muted" style="font-size: 0.85rem; margin: 0; padding: 0.5rem 0;">Nenhuma partida realizada hoje.</p>
-        `;
-      }
-    }
-
-    const roundDateTag = document.getElementById('dash-round-date-tag');
-    const roundStatusLabel = document.getElementById('dash-round-status-label');
-    const roundBody = document.getElementById('dash-round-body');
-
-    if (roundDateTag) {
-      roundDateTag.textContent = currentRound ? (currentRound.dateFormatted || currentRound.date) : Utils.formatDate(new Date());
-    }
-
-    const round = Storage.getCurrentRound();
-    if (roundStatusLabel) {
-      if (round && round.status === 'FINISHED') {
-        roundStatusLabel.textContent = 'NOITE ENCERRADA';
-        roundStatusLabel.className = 'badge status-finished';
-      } else if (round && round.status === 'ACTIVE') {
-        roundStatusLabel.textContent = 'NOITE EM ANDAMENTO';
-        roundStatusLabel.className = 'badge status-live';
-      } else if (round && round.status === 'READY') {
-        roundStatusLabel.textContent = 'PROGRAMAÇÃO PRONTA';
-        roundStatusLabel.className = 'badge status-success';
-      } else if (teams) {
-        roundStatusLabel.textContent = 'PROGRAMAÇÃO PENDENTE';
-        roundStatusLabel.className = 'badge status-warning';
-      } else {
-        const selectedIds = Storage.getSelectedPlayerIds();
-        if (selectedIds.length === 20) {
-          roundStatusLabel.textContent = 'PRONTO PARA O SORTEIO';
-          roundStatusLabel.className = 'badge status-warning';
-        } else {
-          roundStatusLabel.textContent = 'RODADA NÃO CONFIGURADA';
-          roundStatusLabel.className = 'badge';
-        }
-      }
-    }
-
-    if (roundBody) {
-      const selectedIds = Storage.getSelectedPlayerIds();
-      const count = selectedIds.length;
-
-      if (teams) {
-        const drawInfo = Storage.getDrawInfo();
-        const diff = drawInfo ? `${drawInfo.difference} estrelas` : '0 estrelas';
-        roundBody.innerHTML = `
-          <div class="dash-round-info-ready">
-            <div class="dash-round-stat-item">
-              <span class="drs-val highlight">20</span>
-              <span class="drs-lbl">Atletas Selecionados</span>
-            </div>
-            <div class="dash-round-stat-item">
-              <span class="drs-val">4</span>
-              <span class="drs-lbl">Times Formados</span>
-            </div>
-            <div class="dash-round-stat-item">
-              <span class="drs-val">${roundMatches.length}</span>
-              <span class="drs-lbl">Partidas na Rodada</span>
-            </div>
-            <div class="dash-round-stat-item">
-              <span class="drs-val">${todayGoals}</span>
-              <span class="drs-lbl">Gols na Rodada</span>
-            </div>
-          </div>
-          <div class="dash-round-actions admin-only" style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: flex-end;">
-            <button type="button" class="btn btn-secondary btn-sm" id="btn-dash-ver-times">
-              Ver Times da Rodada (${diff})
-            </button>
-          </div>
-        `;
-
-        const btnVer = document.getElementById('btn-dash-ver-times');
-        if (btnVer) {
-          btnVer.onclick = () => this.navigateTo('sorteio');
-        }
-      } else if (count === 20) {
-        roundBody.innerHTML = `
-          <div class="round-status-box">
-            <p class="round-status-text"><strong>20 jogadores selecionados</strong> para esta rodada. Pronto para realizar o sorteio equilibrado.</p>
-            <button type="button" class="btn btn-primary btn-dash-sorteio admin-only" id="btn-dash-sortear-pronto">
-              <span class="btn-icon-wrap" aria-hidden="true">${Utils.icon('shuffle', 22)}</span>
-              <span class="btn-label">REALIZAR SORTEIO DOS TIMES</span>
-            </button>
-          </div>
-        `;
-        const btnSort = document.getElementById('btn-dash-sortear-pronto');
-        if (btnSort) {
-          btnSort.onclick = () => this.navigateTo('sorteio');
-        }
-      } else if (count > 0) {
-        roundBody.innerHTML = `
-          <div class="round-status-box">
-            <p class="round-status-text"><strong>${count} de 20 jogadores selecionados</strong> para a rodada.</p>
-            <button type="button" class="btn btn-secondary admin-only" id="btn-dash-continuar-selecao">
-              Continuar Seleção (${count}/20)
-            </button>
-          </div>
-        `;
-        const btnCont = document.getElementById('btn-dash-continuar-selecao');
-        if (btnCont) {
-          btnCont.onclick = () => this.navigateTo('sorteio');
-        }
-      } else {
-        roundBody.innerHTML = `
-          <div class="round-status-box">
-            <p class="round-empty-text">Rodada ainda não configurada para este futebol.</p>
-            <button type="button" class="btn btn-primary admin-only" id="btn-dash-selecionar-jogadores">
-              SELECIONAR 20 JOGADORES
-            </button>
-          </div>
-        `;
-
-        const btnSel = document.getElementById('btn-dash-selecionar-jogadores');
-        if (btnSel) {
-          btnSel.onclick = () => {
-            if (players.length < 20) {
-              const missing = 20 - players.length;
-              Utils.toast(`Cadastre pelo menos 20 jogadores no sistema. Faltam ${missing}.`, 'warning');
-              this.navigateTo('jogadores');
-            } else {
-              this.navigateTo('sorteio');
-            }
-          };
-        }
-      }
+    if (typeof Dashboard !== 'undefined' && typeof Dashboard.render === 'function') {
+      Dashboard.render();
     }
   },
 

@@ -179,6 +179,10 @@
       <circle cx="17" cy="17" r="3" />
       <circle cx="7" cy="7" r="3" />
     </symbol>
+    <symbol id="i-trend" viewBox="0 0 24 24">
+      <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+      <polyline points="16 7 22 7 22 13" />
+    </symbol>
     <symbol id="i-chart" viewBox="0 0 24 24">
       <path d="M3 3v18h18" />
       <path d="M7 16v-4" />
@@ -326,12 +330,13 @@
       </div>
     </section>
 
-    <!-- ==================== DASHBOARD ==================== -->
+    <!-- ==================== DASHBOARD (CENTRAL DA PELADA) ==================== -->
     <section id="screen-dashboard" class="app-screen">
-      <div class="page-head">
+      <!-- A. CABEÇALHO DA RODADA -->
+      <div class="page-head dash-head">
         <div class="page-head-main">
           <span class="eyebrow" id="dash-hero-league">Rodada atual</span>
-          <h1 class="page-title" id="dash-hero-title">Painel</h1>
+          <h1 class="page-title" id="dash-hero-title">Central da Pelada</h1>
           <div class="page-meta">
             <span class="meta-item">
               <svg class="i i-sm" aria-hidden="true">
@@ -364,128 +369,186 @@
         </div>
       </div>
 
+      <!-- B. PARTIDA ATUAL / ESTADO DA PARTIDA (CARD DE DESTAQUE) -->
+      <div id="dash-hero-match-box" class="dash-hero-match-box"></div>
       <div id="dash-live-match-box" style="display: none;"></div>
 
-      <div class="stats-grid">
-        <div class="stat">
-          <span class="stat-label"><svg class="i i-sm" aria-hidden="true">
-              <use href="#i-users" />
-            </svg>Jogadores</span>
-          <span id="dash-stat-players" class="stat-value">0</span>
-        </div>
-        <div class="stat">
-          <span class="stat-label"><svg class="i i-sm" aria-hidden="true">
-              <use href="#i-whistle" />
-            </svg>Partidas hoje</span>
+      <!-- C. RESUMO DA RODADA -->
+      <div class="dash-stats-grid">
+        <div class="card stat-card">
+          <span class="stat-label">
+            <svg class="i i-sm" aria-hidden="true"><use href="#i-whistle" /></svg>
+            <span>Partidas</span>
+          </span>
           <span id="dash-stat-matches-today" class="stat-value">0</span>
+          <span class="stat-sub">Finalizadas</span>
         </div>
-        <div class="stat">
-          <span class="stat-label"><svg class="i i-sm" aria-hidden="true">
-              <use href="#i-ball" />
-            </svg>Gols hoje</span>
-          <span id="dash-stat-goals-today" class="stat-value">0</span>
+        <div class="card stat-card">
+          <span class="stat-label">
+            <svg class="i i-sm" aria-hidden="true"><use href="#i-ball" /></svg>
+            <span>Gols</span>
+          </span>
+          <span id="dash-stat-goals-today" class="stat-value highlight">0</span>
+          <span class="stat-sub">Na rodada</span>
         </div>
-        <div class="stat">
-          <span class="stat-label"><svg class="i i-sm" aria-hidden="true">
-              <use href="#i-target" />
-            </svg>Artilheiro</span>
-          <span id="dash-stat-top-scorer" class="stat-value stat-value-text">—</span>
+        <div class="card stat-card">
+          <span class="stat-label">
+            <svg class="i i-sm" aria-hidden="true"><use href="#i-users" /></svg>
+            <span>Jogadores</span>
+          </span>
+          <span id="dash-stat-players" class="stat-value">0</span>
+          <span class="stat-sub">Selecionados</span>
+        </div>
+        <div class="card stat-card">
+          <span class="stat-label">
+            <svg class="i i-sm" aria-hidden="true"><use href="#i-target" /></svg>
+            <span>Média de Gols</span>
+          </span>
+          <span id="dash-stat-avg-goals" class="stat-value">0.0</span>
+          <span class="stat-sub">Por partida</span>
         </div>
       </div>
 
-      <div class="dash-columns">
-        <div id="dash-round-status-box" class="card">
+      <!-- Fallback de elementos estatísticos legados (compatibilidade com eventuais buscas DOM) -->
+      <span id="dash-stat-top-scorer" style="display: none;">—</span>
+      <span id="dash-stat-leader" style="display: none;">Nenhum jogo</span>
+      <span id="dash-stat-top-capa" style="display: none;">Nenhuma vitória</span>
+
+      <!-- LAYOUT CENTRAL DA PELADA: GRID ESPORTIVO RESPONSIVO -->
+      <div class="dash-layout-grid">
+        <!-- D. SEÇÃO: RAIO-X DA RODADA (GRÁFICOS) -->
+        <div class="card dash-card dash-section-raiox">
           <div class="card-head">
-            <h2 class="card-title">Rodada da semana</h2>
+            <div class="card-head-title-wrap">
+              <svg class="i i-sm text-primary" aria-hidden="true"><use href="#i-trend" /></svg>
+              <h2 class="card-title">Raio-X da Rodada</h2>
+            </div>
           </div>
-          <div id="dash-round-body"></div>
+          <div class="dash-raiox-grid">
+            <div class="dash-chart-subcard">
+              <h3 class="dash-chart-subhead">GOLS POR PARTIDA</h3>
+              <div id="dash-chart-gols-body"></div>
+            </div>
+            <div class="dash-chart-subcard">
+              <h3 class="dash-chart-subhead">EVOLUÇÃO DOS GOLS</h3>
+              <div id="dash-chart-evolucao-body"></div>
+            </div>
+          </div>
         </div>
 
-        <div class="card">
+        <!-- E. SEÇÃO: ARTILHARIA DA RODADA -->
+        <div class="card dash-card dash-section-artilharia">
           <div class="card-head">
-            <h2 class="card-title">Destaques</h2>
+            <div class="card-head-title-wrap">
+              <svg class="i i-sm text-primary" aria-hidden="true"><use href="#i-target" /></svg>
+              <h2 class="card-title">Artilharia da Rodada</h2>
+            </div>
           </div>
-          <ul class="kv-list">
-            <li>
-              <span class="kv-key"><svg class="i i-sm" aria-hidden="true">
-                  <use href="#i-table" />
-                </svg>Líder da tabela</span>
-              <span id="dash-stat-leader" class="kv-value">Nenhum jogo</span>
-            </li>
-            <li>
-              <span class="kv-key"><svg class="i i-sm" aria-hidden="true">
-                  <use href="#i-crown" />
-                </svg>Líder de capa</span>
-              <span id="dash-stat-top-capa" class="kv-value">Nenhuma vitória</span>
-            </li>
-          </ul>
+          <div id="dash-artilharia-body"></div>
         </div>
 
-        <div class="card" id="dash-standings-preview-card">
+        <!-- F. SEÇÃO: CLASSIFICAÇÃO DA RODADA -->
+        <div class="card dash-card dash-section-classificacao" id="dash-standings-preview-card">
           <div class="card-head" style="display: flex; justify-content: space-between; align-items: center;">
-            <h2 class="card-title">Classificação</h2>
-            <button type="button" class="btn-link" data-screen="tabela"
-              style="font-size: 0.8rem; font-weight: 700; cursor: pointer;">Ver tabela completa &rarr;</button>
+            <div class="card-head-title-wrap">
+              <svg class="i i-sm text-primary" aria-hidden="true"><use href="#i-table" /></svg>
+              <h2 class="card-title">Classificação da Rodada</h2>
+            </div>
+            <button type="button" class="btn-link" data-screen="tabela" style="font-size: 0.8rem; font-weight: 700; cursor: pointer;">
+              <span>Ver tabela completa &rarr;</span>
+            </button>
           </div>
           <div id="dash-standings-body"></div>
         </div>
 
-        <div class="card admin-only">
+        <!-- G. SEÇÃO: DESTAQUES DA PELADA -->
+        <div class="card dash-card dash-section-destaques">
           <div class="card-head">
-            <h2 class="card-title">Atalhos Administrativos</h2>
+            <div class="card-head-title-wrap">
+              <svg class="i i-sm text-primary" aria-hidden="true"><use href="#i-trophy" /></svg>
+              <h2 class="card-title">Destaques da Pelada</h2>
+            </div>
+          </div>
+          <div id="dash-destaques-body"></div>
+        </div>
+
+        <!-- H. SEÇÃO: RANKING DE CAPAS -->
+        <div class="card dash-card dash-section-capas">
+          <div class="card-head" style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="card-head-title-wrap">
+              <svg class="i i-sm text-primary" aria-hidden="true"><use href="#i-crown" /></svg>
+              <h2 class="card-title">Ranking de Capas</h2>
+            </div>
+            <button type="button" class="btn-link" data-screen="rankings" style="font-size: 0.8rem; font-weight: 700; cursor: pointer;">
+              <span>Ver ranking completo &rarr;</span>
+            </button>
+          </div>
+          <div id="dash-capas-body"></div>
+        </div>
+
+        <!-- I. SEÇÃO: RANKING GERAL DOS JOGADORES -->
+        <div class="card dash-card dash-section-geral">
+          <div class="card-head" style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="card-head-title-wrap">
+              <svg class="i i-sm text-primary" aria-hidden="true"><use href="#i-users" /></svg>
+              <h2 class="card-title">Ranking Geral</h2>
+            </div>
+            <button type="button" class="btn-link" data-screen="rankings" style="font-size: 0.8rem; font-weight: 700; cursor: pointer;">
+              <span>Ver ranking completo &rarr;</span>
+            </button>
+          </div>
+          <div id="dash-ranking-geral-body"></div>
+        </div>
+
+        <!-- J. SEÇÃO: ÚLTIMAS PARTIDAS -->
+        <div class="card dash-card dash-section-ultimas">
+          <div class="card-head" style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="card-head-title-wrap">
+              <svg class="i i-sm text-primary" aria-hidden="true"><use href="#i-history" /></svg>
+              <h2 class="card-title">Últimas Partidas</h2>
+            </div>
+            <button type="button" class="btn-link" data-screen="historico" style="font-size: 0.8rem; font-weight: 700; cursor: pointer;">
+              <span>Ver histórico completo &rarr;</span>
+            </button>
+          </div>
+          <div id="dash-ultimas-partidas-body"></div>
+        </div>
+
+        <!-- ATALHOS ADMINISTRATIVOS -->
+        <div class="card dash-card dash-section-shortcuts admin-only">
+          <div class="card-head">
+            <div class="card-head-title-wrap">
+              <svg class="i i-sm text-primary" aria-hidden="true"><use href="#i-settings" /></svg>
+              <h2 class="card-title">Atalhos da Gestão</h2>
+            </div>
           </div>
           <div class="dash-admin-shortcuts" style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
             <button type="button" class="btn btn-secondary btn-sm" data-screen="configuracoes">
-              <svg class="i i-sm" aria-hidden="true">
-                <use href="#i-settings" />
-              </svg>
+              <svg class="i i-sm" aria-hidden="true"><use href="#i-settings" /></svg>
               <span>Configurações</span>
             </button>
             <button type="button" class="btn btn-secondary btn-sm" data-screen="jogadores">
-              <svg class="i i-sm" aria-hidden="true">
-                <use href="#i-users" />
-              </svg>
+              <svg class="i i-sm" aria-hidden="true"><use href="#i-users" /></svg>
               <span>Jogadores</span>
             </button>
             <button type="button" class="btn btn-secondary btn-sm" data-screen="sorteio">
-              <svg class="i i-sm" aria-hidden="true">
-                <use href="#i-shuffle" />
-              </svg>
+              <svg class="i i-sm" aria-hidden="true"><use href="#i-shuffle" /></svg>
               <span>Rodada / Sorteio</span>
             </button>
             <button type="button" class="btn btn-secondary btn-sm" data-screen="historico">
-              <svg class="i i-sm" aria-hidden="true">
-                <use href="#i-history" />
-              </svg>
+              <svg class="i i-sm" aria-hidden="true"><use href="#i-history" /></svg>
               <span>Histórico</span>
             </button>
             <button type="button" class="btn btn-secondary btn-sm" data-screen="rankings">
-              <svg class="i i-sm" aria-hidden="true">
-                <use href="#i-trophy" />
-              </svg>
+              <svg class="i i-sm" aria-hidden="true"><use href="#i-trophy" /></svg>
               <span>Rankings</span>
             </button>
           </div>
         </div>
       </div>
 
-      <div class="card settings-card admin-only">
-        <div class="card-head">
-          <h2 class="card-title">Manutenção</h2>
-        </div>
-        <div class="settings-row">
-          <div>
-            <strong class="settings-title">Zerar dados do futebol</strong>
-            <p class="settings-text">Apaga jogadores, rodadas, histórico e rankings. Não pode ser desfeito.</p>
-          </div>
-          <button type="button" id="btn-reset-data" class="btn btn-danger btn-sm admin-only" style="display: none;">
-            <svg class="i" aria-hidden="true">
-              <use href="#i-trash" />
-            </svg>
-            <span>Zerar dados</span>
-          </button>
-        </div>
-      </div>
+      <!-- Botão oculto para preservar compatibilidade com listeners legados -->
+      <button type="button" id="btn-reset-data" class="admin-only" style="display: none;"></button>
     </section>
 
     <!-- ==================== JOGADORES ==================== -->
@@ -692,67 +755,100 @@
             </div>
           </div>
 
-          <!-- Placar -->
-          <div class="scoreboard">
+          <!-- Placar / Tela de Jogo (Apresentação Esportiva Estilo Champions League) -->
+          <div class="scoreboard match-broadcast-card">
+            <!-- Topo: Badge de Status da Partida -->
             <div class="sb-top">
-              <span id="match-live-badge" class="live-badge">Pré-jogo</span>
+              <div class="sb-broadcast-badge">
+                <span class="live-dot" aria-hidden="true"></span>
+                <span id="match-live-badge" class="live-badge">PARTIDA 01 · AGUARDANDO INÍCIO</span>
+              </div>
             </div>
 
-            <div class="sb-main">
+            <!-- Arena Central: Times e Placar Dominante -->
+            <div class="sb-arena sb-main">
+              <!-- Time Mandante (Home) -->
               <div class="sb-team sb-home" id="block-team-home">
-                <div class="sb-team-name">
-                  <span class="team-chip" id="badge-team-home"></span>
-                  <span id="scoreboard-home-name">TIME 1</span>
+                <div class="sb-team-identity">
+                  <div class="team-crest-badge team-chip" id="badge-team-home">1</div>
+                  <div class="sb-team-name-wrap">
+                    <span class="sb-team-name" id="scoreboard-home-name">TIME 1</span>
+                  </div>
                 </div>
-                <div class="sb-score" id="scoreboard-home-score">0</div>
               </div>
 
-              <div class="sb-sep" aria-hidden="true">—</div>
-
-              <div class="sb-team sb-away" id="block-team-away">
-                <div class="sb-team-name">
-                  <span id="scoreboard-away-name">TIME 2</span>
-                  <span class="team-chip" id="badge-team-away"></span>
+              <!-- Placar Central Dominante (O Protagonista) -->
+              <div class="sb-score-center">
+                <div class="sb-score-display">
+                  <span class="sb-score" id="scoreboard-home-score">0</span>
+                  <span class="sb-sep" aria-hidden="true">&times;</span>
+                  <span class="sb-score" id="scoreboard-away-score">0</span>
                 </div>
-                <div class="sb-score" id="scoreboard-away-score">0</div>
+              </div>
+
+              <!-- Time Visitante (Away) -->
+              <div class="sb-team sb-away" id="block-team-away">
+                <div class="sb-team-identity">
+                  <div class="sb-team-name-wrap">
+                    <span class="sb-team-name" id="scoreboard-away-name">TIME 2</span>
+                  </div>
+                  <div class="team-crest-badge team-chip" id="badge-team-away">2</div>
+                </div>
               </div>
             </div>
 
+            <!-- Cronômetro e Status da Partida (abaixo do placar) -->
             <div class="sb-clock">
-              <div class="sb-timer" id="scoreboard-timer" aria-live="off">07:00</div>
+              <div class="sb-timer-container">
+                <div class="sb-timer" id="scoreboard-timer" aria-live="off">07:00</div>
+              </div>
               <div class="sb-status" id="match-status-tag">Não iniciada</div>
               <div class="sb-result" id="match-result-line" style="display: none;"></div>
             </div>
 
+            <!-- Marcadores / Gols Recentes (Compacto) -->
+            <div class="sb-scorers-summary" id="scoreboard-scorers-summary" style="display: none;">
+              <div class="sb-scorers-side sb-scorers-home" id="scoreboard-scorers-home"></div>
+              <div class="sb-scorers-sep" aria-hidden="true"></div>
+              <div class="sb-scorers-side sb-scorers-away" id="scoreboard-scorers-away"></div>
+            </div>
+
+            <!-- Botões de Registrar Gol -->
             <div class="sb-goals admin-only">
-              <button type="button" class="btn-goal" id="btn-add-goal-home">
-                <span>+ GOL</span>
+              <button type="button" class="btn-goal btn-goal-home" id="btn-add-goal-home">
+                <svg class="i i-sm" aria-hidden="true"><use href="#i-ball"/></svg>
+                <span>+ GOL TIME 1</span>
               </button>
-              <button type="button" class="btn-goal" id="btn-add-goal-away">
-                <span>+ GOL</span>
+              <button type="button" class="btn-goal btn-goal-away" id="btn-add-goal-away">
+                <svg class="i i-sm" aria-hidden="true"><use href="#i-ball"/></svg>
+                <span>+ GOL TIME 2</span>
               </button>
             </div>
 
+            <!-- Barra de Controles da Partida -->
             <div class="sb-controls admin-only">
               <div class="sb-controls-left">
-                <button type="button" class="btn btn-primary" id="btn-timer-start">
+                <button type="button" class="btn btn-primary btn-sb-action" id="btn-timer-start">
+                  <svg class="i i-sm" aria-hidden="true"><use href="#i-play"/></svg>
                   <span>INICIAR</span>
                 </button>
-                <button type="button" class="btn btn-secondary" id="btn-timer-pause" style="display: none;">
+                <button type="button" class="btn btn-secondary btn-sb-action" id="btn-timer-pause" style="display: none;">
+                  <svg class="i i-sm" aria-hidden="true"><use href="#i-flag"/></svg>
                   <span>PAUSAR</span>
                 </button>
-                <button type="button" class="btn btn-ghost btn-square" id="btn-timer-reset" title="Reiniciar cronômetro"
+                <button type="button" class="btn btn-ghost btn-sb-reset" id="btn-timer-reset" title="Reiniciar cronômetro"
                   aria-label="Reiniciar cronômetro">
-                  <svg class="i" aria-hidden="true">
+                  <svg class="i i-sm" aria-hidden="true">
                     <use href="#i-rotate" />
                   </svg>
+                  <span class="btn-reset-text">REINICIAR</span>
                 </button>
               </div>
-              <button type="button" class="btn btn-danger" id="btn-timer-finish">
-                <svg class="i" aria-hidden="true">
+              <button type="button" class="btn btn-danger btn-sb-finish" id="btn-timer-finish">
+                <svg class="i i-sm" aria-hidden="true">
                   <use href="#i-flag" />
                 </svg>
-                <span>Finalizar</span>
+                <span>FINALIZAR</span>
               </button>
             </div>
           </div>
@@ -900,13 +996,12 @@
             style="margin-top: 2rem; border-top: 1px solid var(--border-subtle, rgba(255,255,255,0.08)); padding-top: 1.25rem;">
             <h4 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 0.4rem; color: var(--danger, #ff4d4f);">Zona
               de Perigo</h4>
-            <p class="settings-text" style="margin-bottom: 0.85rem;">Apaga jogadores, rodadas, histórico e rankings
-              deste futebol.</p>
+            <p class="settings-text" style="margin-bottom: 0.85rem;">Apaga todas as rodadas, partidas, histórico, gols, rankings e Capas deste futebol. Os jogadores cadastrados serão preservados.</p>
             <button type="button" id="btn-settings-reset-data" class="btn btn-danger btn-sm admin-only">
               <svg class="i" aria-hidden="true">
                 <use href="#i-trash" />
               </svg>
-              <span>Zerar dados</span>
+              <span>ZERAR TUDO</span>
             </button>
           </div>
         </div>

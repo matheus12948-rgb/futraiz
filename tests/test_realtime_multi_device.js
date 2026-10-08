@@ -330,8 +330,11 @@ async function runMultiDeviceTests() {
   devA.activate();
   // Finaliza partida 2 e encerra a noite
   Partidas.state.status = 'finished';
+  Partidas.state.isActive = false;
+  Partidas.state.isPaused = false;
   Partidas.state.homeScore = 2;
   Partidas.state.awayScore = 0;
+  await Partidas.saveFullState();
   const match2UUID = Utils.generateUUID();
   Storage.addMatch({
     id: match2UUID,

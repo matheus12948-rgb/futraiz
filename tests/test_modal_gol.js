@@ -196,10 +196,7 @@ async function runModalGolTests() {
 
   // 1. SETUP DE DADOS COM SUPABASE AUTENTICADO
   console.log('--- ETAPA 1: Setup do Futebol, Times e Autenticação Supabase ---');
-  Storage.init();
   const testFut = { id: 'c0000000-0000-4000-8000-000000000003', nome: 'Fut Modal Test', admin_id: 'admin_123' };
-  Storage.currentFutebol = testFut;
-  Storage.userRole = 'ADMIN';
 
   // Configura sessão ativa e RLS no mock do Supabase
   const mockAdminUser = { id: 'admin_123', email: 'admin@modaltest.com' };
@@ -210,6 +207,10 @@ async function runModalGolTests() {
     futebol_admins: [{ id: 'adm_link_1', futebol_id: testFut.id, user_id: mockAdminUser.id, role: 'admin' }],
     partida_ao_vivo: []
   }));
+
+  await Storage.init();
+  Storage.currentFutebol = testFut;
+  Storage.userRole = 'ADMIN';
 
   const mockTeams = {
     team1: {

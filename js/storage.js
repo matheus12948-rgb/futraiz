@@ -4,7 +4,7 @@
  * e isolamento estrito entre múltiplos futebóis independentes.
  */
 
-import { supabase } from './supabaseClient.js';
+import { supabase, SupabaseConfig } from './supabaseClient.js';
 import { Utils } from './utils.js';
 
 const _memoryStore = {
@@ -601,7 +601,7 @@ export const Storage = {
     const existingIdx = matches.findIndex(m => m.id === dbMatch.id);
     const localMatch = {
       id: dbMatch.id,
-      roundId: dbMatch.rodada_id,
+      roundId: dbMatch.rodada_id || (existingIdx !== -1 ? matches[existingIdx].roundId : null),
       homeTeamId: dbMatch.time_casa_id,
       awayTeamId: dbMatch.time_fora_id,
       homeTeamName: dbMatch.time_casa_nome,
@@ -635,31 +635,42 @@ export const Storage = {
         .order('created_at', { ascending: false });
 
       if (dbMatches && Array.isArray(dbMatches)) {
-        const matches = this.getMatches();
-        dbMatches.forEach(dbMatch => {
-          const exists = matches.some(m => m.id === dbMatch.id || (m.homeTeamId === dbMatch.time_casa_id && m.awayTeamId === dbMatch.time_fora_id && m.homeScore === dbMatch.placar_casa && m.awayScore === dbMatch.placar_fora));
-          if (!exists) {
-            matches.push({
-              id: dbMatch.id,
-              roundId: dbMatch.rodada_id,
-              homeTeamId: dbMatch.time_casa_id,
-              awayTeamId: dbMatch.time_fora_id,
-              homeTeamName: dbMatch.time_casa_nome,
-              awayTeamName: dbMatch.time_fora_nome,
-              homeScore: dbMatch.placar_casa,
-              awayScore: dbMatch.placar_fora,
-              status: dbMatch.status || 'finalizada',
-              isTie: dbMatch.placar_casa === dbMatch.placar_fora,
-              winner: dbMatch.placar_casa > dbMatch.placar_fora ? dbMatch.time_casa_id : (dbMatch.placar_fora > dbMatch.placar_casa ? dbMatch.time_fora_id : null),
-              loser: dbMatch.placar_casa > dbMatch.placar_fora ? dbMatch.time_fora_id : (dbMatch.placar_fora > dbMatch.placar_casa ? dbMatch.time_casa_id : null),
-              dateKey: Utils.getDateKey(new Date(dbMatch.created_at || Date.now())),
-              createdAt: dbMatch.created_at || new Date().toISOString()
-            });
-          }
+        const localMatches = this.getMatches();
+        const mapped = dbMatches.map(dbMatch => {
+          const existing = localMatches.find(m => m.id === dbMatch.id);
+          const mOrder = dbMatch.ordem !== undefined ? dbMatch.ordem : (existing && existing.matchOrder ? existing.matchOrder : 1);
+          return {
+            id: dbMatch.id,
+            roundId: dbMatch.rodada_id || (existing ? existing.roundId : null),
+            matchOrder: mOrder,
+            ordem: mOrder,
+            date: Utils.formatDate(new Date(dbMatch.created_at || Date.now())),
+            time: Utils.formatTime(new Date(dbMatch.created_at || Date.now())),
+            homeTeamId: dbMatch.time_casa_id,
+            awayTeamId: dbMatch.time_fora_id,
+            homeTeamName: dbMatch.time_casa_nome,
+            awayTeamName: dbMatch.time_fora_nome,
+            homeScore: dbMatch.placar_casa,
+            awayScore: dbMatch.placar_fora,
+            status: dbMatch.status || 'finalizada',
+            isTie: dbMatch.placar_casa === dbMatch.placar_fora,
+            winner: dbMatch.placar_casa > dbMatch.placar_fora ? dbMatch.time_casa_id : (dbMatch.placar_fora > dbMatch.placar_casa ? dbMatch.time_fora_id : null),
+            loser: dbMatch.placar_casa > dbMatch.placar_fora ? dbMatch.time_fora_id : (dbMatch.placar_fora > dbMatch.placar_casa ? dbMatch.time_casa_id : null),
+            dateKey: Utils.getDateKey(new Date(dbMatch.created_at || Date.now())),
+            createdAt: dbMatch.created_at || new Date().toISOString(),
+            ...(existing && existing.goals ? { goals: existing.goals } : {}),
+            ...(existing && existing.homePlayers ? { homePlayers: existing.homePlayers } : {}),
+            ...(existing && existing.awayPlayers ? { awayPlayers: existing.awayPlayers } : {})
+          };
         });
         const key = this._getScopedKey('matches');
-        matches.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-        store.setItem(key, JSON.stringify(matches));
+        mapped.sort((a, b) => {
+          const ordA = a.matchOrder || a.ordem || 0;
+          const ordB = b.matchOrder || b.ordem || 0;
+          if (ordB !== ordA) return ordB - ordA;
+          return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+        });
+        store.setItem(key, JSON.stringify(mapped));
       }
     } catch (err) {
       console.warn('Sync matches error:', err);
@@ -676,6 +687,18 @@ export const Storage = {
         .order('created_at', { ascending: false });
 
       if (dbRounds && Array.isArray(dbRounds)) {
+        if (dbRounds.length === 0) {
+          const key = this._getScopedKey('rounds');
+          store.setItem(key, JSON.stringify([]));
+          store.removeItem(this._getScopedKey('current_round'));
+          store.removeItem(this._getScopedKey('teams'));
+          store.removeItem(this._getScopedKey('draw_info'));
+          store.removeItem(this._getScopedKey('selected_players'));
+          this._emitChange('rounds', []);
+          this._emitChange('currentRound', null);
+          this._emitChange('teams', null);
+          return;
+        }
         const rounds = this.getRounds();
         dbRounds.forEach(dr => {
           const existingIdx = rounds.findIndex(r => r.id === dr.id);
@@ -733,6 +756,20 @@ export const Storage = {
               store.setItem(this._getScopedKey('selected_players'), JSON.stringify(fullRound.selectedPlayers));
             }
             this._emitChange('currentRound', fullRound);
+          }
+        } else {
+          // Se a rodada atual foi encerrada no Supabase (status FINISHED), atualiza localmente
+          const curRound = this.getCurrentRound();
+          if (curRound) {
+            const matchingDb = dbRounds.find(r => r.id === curRound.id);
+            if (matchingDb && matchingDb.status === 'FINISHED') {
+              const finishedRound = rounds.find(r => r.id === curRound.id);
+              if (finishedRound) {
+                store.setItem(this._getScopedKey('current_round'), JSON.stringify(finishedRound));
+                this._emitChange('currentRound', finishedRound);
+                this._emitChange('nightFinalized', finishedRound);
+              }
+            }
           }
         }
       }
@@ -796,6 +833,94 @@ export const Storage = {
     }
   },
 
+  _normalizeLiveMatchData(row, payloadData = {}) {
+    if (!row && !payloadData) return null;
+    const r = row || {};
+    const p = (payloadData && typeof payloadData === 'object') ? payloadData : {};
+
+    const orderNum = r.order_num !== undefined ? r.order_num : (r.order !== undefined ? r.order : (p.order !== undefined ? p.order : (p.order_num !== undefined ? p.order_num : 1)));
+    const homeId = r.home_team_id || r.homeTeamId || p.homeTeamId || p.home_team_id || 'time_1';
+    const awayId = r.away_team_id || r.awayTeamId || p.awayTeamId || p.away_team_id || 'time_2';
+    const homeName = r.time_casa_nome || r.homeTeamName || p.homeTeamName || p.time_casa_nome || 'Time 1';
+    const awayName = r.time_fora_nome || r.awayTeamName || p.awayTeamName || p.time_fora_nome || 'Time 2';
+    const homeScore = r.placar_casa !== undefined ? r.placar_casa : (r.homeScore !== undefined ? r.homeScore : (p.homeScore !== undefined ? p.homeScore : (p.placar_casa !== undefined ? p.placar_casa : 0)));
+    const awayScore = r.placar_fora !== undefined ? r.placar_fora : (r.awayScore !== undefined ? r.awayScore : (p.awayScore !== undefined ? p.awayScore : (p.placar_fora !== undefined ? p.placar_fora : 0)));
+    const status = r.status || p.status || (r.is_active ? (r.is_paused ? 'paused' : 'running') : (p.isActive ? (p.isPaused ? 'paused' : 'running') : 'ready'));
+    const isActive = Boolean(r.is_active !== undefined ? r.is_active : (r.isActive !== undefined ? r.isActive : (p.isActive !== undefined ? p.isActive : (status === 'running' || status === 'paused'))));
+    const isPaused = Boolean(r.is_paused !== undefined ? r.is_paused : (r.isPaused !== undefined ? r.isPaused : (p.isPaused !== undefined ? p.isPaused : (status === 'paused'))));
+    const isTie = Boolean(r.is_tie !== undefined ? r.is_tie : (r.isTie !== undefined ? r.isTie : (p.isTie !== undefined ? p.isTie : p.is_tie)));
+    const remainingSecs = r.tempo_restante !== undefined ? r.tempo_restante : (r.remainingSeconds !== undefined ? r.remainingSeconds : (p.remainingSeconds !== undefined ? p.remainingSeconds : (p.tempo_restante !== undefined ? p.tempo_restante : 420)));
+    const goals = Array.isArray(r.goals) ? r.goals : (Array.isArray(r.gols) ? r.gols : (Array.isArray(p.goals) ? p.goals : (Array.isArray(p.gols) ? p.gols : [])));
+    const winnerId = r.winner_team_id || r.winnerTeamId || p.winnerTeamId || p.winner_team_id || null;
+    const winnerName = r.winner_team_name || r.winnerTeamName || p.winnerTeamName || p.winner_team_name || null;
+    const loserId = r.loser_team_id || r.loserTeamId || p.loserTeamId || p.loser_team_id || null;
+    const waitingNext = Boolean(r.waiting_next_opponent !== undefined ? r.waiting_next_opponent : (r.waitingNextOpponent !== undefined ? r.waitingNextOpponent : (p.waitingNextOpponent !== undefined ? p.waitingNextOpponent : p.waiting_next_opponent)));
+    const waitingTie = Boolean(r.waiting_tie_next_match !== undefined ? r.waiting_tie_next_match : (r.waitingTieNextMatch !== undefined ? r.waitingTieNextMatch : (p.waitingTieNextMatch !== undefined ? p.waitingTieNextMatch : p.waiting_tie_next_match)));
+    const tieNextMatch = r.tie_next_match || r.tieNextMatch || p.tieNextMatch || p.tie_next_match || null;
+    const lastMatchSummary = r.last_match_summary || r.lastMatchSummary || p.lastMatchSummary || p.last_match_summary || null;
+    const startedAt = r.startedAt || r.started_at || p.startedAt || p.started_at || null;
+    const pausedAt = r.pausedAt || r.paused_at || p.pausedAt || p.paused_at || null;
+    const remainingAtStart = r.remainingAtStart !== undefined ? r.remainingAtStart : (r.remaining_at_start !== undefined ? r.remaining_at_start : (p.remainingAtStart !== undefined ? p.remainingAtStart : (p.remaining_at_start !== undefined ? p.remaining_at_start : remainingSecs)));
+    const elapsedSecs = r.elapsedSeconds !== undefined ? r.elapsedSeconds : (r.elapsed_seconds !== undefined ? r.elapsed_seconds : (p.elapsedSeconds !== undefined ? p.elapsedSeconds : (p.elapsed_seconds !== undefined ? p.elapsed_seconds : 0)));
+    const lastTick = r.lastTick || p.lastTick || null;
+
+    return {
+      ...p,
+      ...r,
+      order: orderNum,
+      order_num: orderNum,
+      homeTeamId: homeId,
+      home_team_id: homeId,
+      awayTeamId: awayId,
+      away_team_id: awayId,
+      homeTeamName: homeName,
+      time_casa_nome: homeName,
+      awayTeamName: awayName,
+      time_fora_nome: awayName,
+      homeScore: homeScore,
+      placar_casa: homeScore,
+      awayScore: awayScore,
+      placar_fora: awayScore,
+      status: status,
+      isActive: isActive,
+      is_active: isActive,
+      isPaused: isPaused,
+      is_paused: isPaused,
+      isTie: isTie,
+      is_tie: isTie,
+      remainingSeconds: remainingSecs,
+      tempo_restante: remainingSecs,
+      goals: goals,
+      gols: goals,
+      winnerTeamId: winnerId,
+      winner_team_id: winnerId,
+      winnerTeamName: winnerName,
+      winner_team_name: winnerName,
+      loserTeamId: loserId,
+      loser_team_id: loserId,
+      waitingNextOpponent: waitingNext,
+      waiting_next_opponent: waitingNext,
+      waitingTieNextMatch: waitingTie,
+      waiting_tie_next_match: waitingTie,
+      tieNextMatch: tieNextMatch,
+      tie_next_match: tieNextMatch,
+      lastMatchSummary: lastMatchSummary,
+      last_match_summary: lastMatchSummary,
+      startedAt: startedAt,
+      started_at: startedAt,
+      pausedAt: pausedAt,
+      paused_at: pausedAt,
+      remainingAtStart: remainingAtStart,
+      remaining_at_start: remainingAtStart,
+      elapsedSeconds: elapsedSecs,
+      elapsed_seconds: elapsedSecs,
+      lastTick: lastTick,
+      durationMinutes: p.durationMinutes || (r.duration_seconds ? Math.floor(r.duration_seconds / 60) : 7),
+      durationSeconds: r.duration_seconds || (p.durationMinutes ? p.durationMinutes * 60 : (p.durationSeconds || 420)),
+      duration_seconds: r.duration_seconds || (p.durationMinutes ? p.durationMinutes * 60 : (p.durationSeconds || 420))
+    };
+  },
+
   async syncLiveMatchFromSupabase(futebolId) {
     if (!futebolId) return;
     try {
@@ -812,30 +937,14 @@ export const Storage = {
         console.warn('[Storage] Erro ao consultar partida_ao_vivo:', qErr);
       }
 
-      if (liveRow) {
+      if (liveRow && (liveRow.status !== 'ready' || liveRow.is_active || liveRow.payload || liveRow.order_num > 1 || liveRow.waiting_tie_next_match || (liveRow.home_team_id && liveRow.home_team_id !== 'time_1'))) {
         const payloadData = (liveRow.payload && typeof liveRow.payload === 'object') ? liveRow.payload : {};
-        const winnerId = liveRow.winner_team_id || payloadData.winnerTeamId || payloadData.winner_team_id || null;
-        const winnerName = liveRow.winner_team_name || payloadData.winnerTeamName || payloadData.winner_team_name || null;
-        const loserId = liveRow.loser_team_id || payloadData.loserTeamId || payloadData.loser_team_id || null;
-        const waitingNext = Boolean(liveRow.waiting_next_opponent !== undefined ? liveRow.waiting_next_opponent : (payloadData.waitingNextOpponent !== undefined ? payloadData.waitingNextOpponent : payloadData.waiting_next_opponent));
-        const waitingTie = Boolean(liveRow.waiting_tie_next_match !== undefined ? liveRow.waiting_tie_next_match : (payloadData.waitingTieNextMatch !== undefined ? payloadData.waitingTieNextMatch : payloadData.waiting_tie_next_match));
-
-        const liveData = {
-          ...payloadData,
-          ...liveRow,
-          winnerTeamId: winnerId,
-          winner_team_id: winnerId,
-          winnerTeamName: winnerName,
-          winner_team_name: winnerName,
-          loserTeamId: loserId,
-          loser_team_id: loserId,
-          waitingNextOpponent: waitingNext,
-          waiting_next_opponent: waitingNext,
-          waitingTieNextMatch: waitingTie,
-          waiting_tie_next_match: waitingTie
-        };
+        const liveData = this._normalizeLiveMatchData(liveRow, payloadData);
         this._saveLocalLiveMatch(liveData);
         this._emitChange('liveMatchUpdate', liveData);
+      } else {
+        this._saveLocalLiveMatch(null);
+        this._emitChange('liveMatchUpdate', null);
       }
     } catch (err) {
       console.warn('[Storage] Erro ao sincronizar partida ao vivo do Supabase:', err);
@@ -873,35 +982,23 @@ export const Storage = {
       }
       const channel = supabase.channel(`futebol_${futebolId}`);
       channel.on('postgres_changes', { event: '*', schema: 'public', table: 'partida_ao_vivo' }, (payload) => {
+        if (payload?.eventType === 'DELETE' || (!payload?.new && payload?.old)) {
+          this._saveLocalLiveMatch(null);
+          this._emitChange('liveMatch', null);
+          this._emitChange('liveMatchUpdate', null);
+          return;
+        }
         if (payload.new && payload.new.futebol_id === futebolId) {
           const payloadData = (payload.new.payload && typeof payload.new.payload === 'object') ? payload.new.payload : {};
-          const winnerId = payload.new.winner_team_id || payloadData.winnerTeamId || payloadData.winner_team_id || null;
-          const winnerName = payload.new.winner_team_name || payloadData.winnerTeamName || payloadData.winner_team_name || null;
-          const loserId = payload.new.loser_team_id || payloadData.loserTeamId || payloadData.loser_team_id || null;
-          const waitingNext = Boolean(payload.new.waiting_next_opponent !== undefined ? payload.new.waiting_next_opponent : (payloadData.waitingNextOpponent !== undefined ? payloadData.waitingNextOpponent : payloadData.waiting_next_opponent));
-          const waitingTie = Boolean(payload.new.waiting_tie_next_match !== undefined ? payload.new.waiting_tie_next_match : (payloadData.waitingTieNextMatch !== undefined ? payloadData.waitingTieNextMatch : payloadData.waiting_tie_next_match));
-
-          const liveData = {
-            ...payloadData,
-            ...payload.new,
-            winnerTeamId: winnerId,
-            winner_team_id: winnerId,
-            winnerTeamName: winnerName,
-            winner_team_name: winnerName,
-            loserTeamId: loserId,
-            loser_team_id: loserId,
-            waitingNextOpponent: waitingNext,
-            waiting_next_opponent: waitingNext,
-            waitingTieNextMatch: waitingTie,
-            waiting_tie_next_match: waitingTie
-          };
+          const liveData = this._normalizeLiveMatchData(payload.new, payloadData);
           this._saveLocalLiveMatch(liveData);
           this._emitChange('liveMatchUpdate', liveData);
         }
       });
       channel.on('postgres_changes', { event: '*', schema: 'public', table: 'partidas' }, async (payload) => {
-        if (payload?.new && payload.new.futebol_id && payload.new.futebol_id !== futebolId) return;
-        if (payload && payload.new) {
+        const targetFut = (payload?.new && payload.new.futebol_id) || (payload?.old && payload.old.futebol_id);
+        if (targetFut && targetFut !== futebolId) return;
+        if (payload && payload.eventType !== 'DELETE' && payload.new && Object.keys(payload.new).length > 0) {
           await this.syncMatchFromSupabase(payload.new);
         } else {
           await this.syncMatchesFromSupabase(futebolId);
@@ -909,21 +1006,25 @@ export const Storage = {
         this._emitChange('matches', this.getMatches());
       });
       channel.on('postgres_changes', { event: '*', schema: 'public', table: 'gols' }, async (payload) => {
-        if (payload?.new && payload.new.futebol_id && payload.new.futebol_id !== futebolId) return;
+        const targetFut = (payload?.new && payload.new.futebol_id) || (payload?.old && payload.old.futebol_id);
+        if (targetFut && targetFut !== futebolId) return;
         await this.syncMatchesFromSupabase(futebolId);
         this._emitChange('matches', this.getMatches());
       });
       channel.on('postgres_changes', { event: '*', schema: 'public', table: 'rodadas' }, async (payload) => {
-        if (payload?.new && payload.new.futebol_id && payload.new.futebol_id !== futebolId) return;
+        const targetFut = (payload?.new && payload.new.futebol_id) || (payload?.old && payload.old.futebol_id);
+        if (targetFut && targetFut !== futebolId) return;
         await this.syncRoundsFromSupabase(futebolId);
         this._emitChange('rounds', this.getRounds());
       });
       channel.on('postgres_changes', { event: '*', schema: 'public', table: 'times' }, async (payload) => {
-        if (payload?.new && payload.new.futebol_id && payload.new.futebol_id !== futebolId) return;
+        const targetFut = (payload?.new && payload.new.futebol_id) || (payload?.old && payload.old.futebol_id);
+        if (targetFut && targetFut !== futebolId) return;
         await this.syncRoundsFromSupabase(futebolId);
       });
       channel.on('postgres_changes', { event: '*', schema: 'public', table: 'time_jogadores' }, async (payload) => {
-        if (payload?.new && payload.new.futebol_id && payload.new.futebol_id !== futebolId) return;
+        const targetFut = (payload?.new && payload.new.futebol_id) || (payload?.old && payload.old.futebol_id);
+        if (targetFut && targetFut !== futebolId) return;
         await this.syncRoundsFromSupabase(futebolId);
       });
       channel.on('postgres_changes', { event: '*', schema: 'public', table: 'rodada_classificacao' }, async () => {
@@ -936,7 +1037,8 @@ export const Storage = {
         this._emitChange('players', this.getPlayers(futebolId));
       });
       channel.on('postgres_changes', { event: '*', schema: 'public', table: 'capas' }, async (payload) => {
-        if (payload?.new && payload.new.futebol_id && payload.new.futebol_id !== futebolId) return;
+        const targetFut = (payload?.new && payload.new.futebol_id) || (payload?.old && payload.old.futebol_id);
+        if (targetFut && targetFut !== futebolId) return;
         await this.syncCapasFromSupabase(futebolId);
         this._emitChange('capas', this.getCapas());
       });
@@ -1495,26 +1597,20 @@ export const Storage = {
         .eq('futebol_id', futebolId);
 
       if (dbCapas && Array.isArray(dbCapas)) {
-        const localCapas = this.getCapas();
-        const merged = [...localCapas];
-        dbCapas.forEach(dc => {
-          if (!merged.some(mc => mc.id === dc.id || (mc.rodada_id === dc.rodada_id && mc.jogador_id === dc.jogador_id))) {
-            merged.push({
-              id: dc.id,
-              futebol_id: dc.futebol_id,
-              rodada_id: dc.rodada_id,
-              jogador_id: dc.jogador_id,
-              time_id: dc.time_id,
-              playerName: dc.playerName || '',
-              teamName: dc.teamName || '',
-              date: dc.date || '',
-              createdAt: dc.created_at || new Date().toISOString()
-            });
-          }
-        });
+        const mapped = dbCapas.map(dc => ({
+          id: dc.id,
+          futebol_id: dc.futebol_id,
+          rodada_id: dc.rodada_id,
+          jogador_id: dc.jogador_id,
+          time_id: dc.time_id,
+          playerName: dc.playerName || '',
+          teamName: dc.teamName || '',
+          date: dc.date || '',
+          createdAt: dc.created_at || new Date().toISOString()
+        }));
         const key = this._getScopedKey('capas');
-        store.setItem(key, JSON.stringify(merged));
-        this._emitChange('capas', merged);
+        store.setItem(key, JSON.stringify(mapped));
+        this._emitChange('capas', mapped);
       }
     } catch (err) {
       console.warn('[Storage] Erro ao sincronizar capas:', err);
@@ -1614,6 +1710,11 @@ export const Storage = {
   saveCurrentRound(round) {
     this.assertAdmin('Salvar rodada atual');
     try {
+      const existing = this.getCurrentRound();
+      if (existing && round && existing.id === round.id && existing.status === 'FINISHED' && round.status !== 'FINISHED') {
+        throw new Error('Esta noite já foi encerrada. O status FINISHED é definitivo.');
+      }
+
       const key = this._getScopedKey('current_round');
       if (!round) {
         store.removeItem(key);
@@ -1699,7 +1800,7 @@ export const Storage = {
       const data = store.getItem(key);
       if (data) {
         const parsed = JSON.parse(data);
-        if (parsed && typeof parsed === 'object' && (parsed.team1 || parsed.team_1)) {
+        if (parsed && typeof parsed === 'object' && (parsed.time_1 || parsed.time1 || parsed.team1 || parsed.team_1 || (Array.isArray(parsed) && parsed.length > 0) || Object.keys(parsed).length >= 2)) {
           return parsed;
         }
       }
@@ -1708,15 +1809,6 @@ export const Storage = {
       if (currentRound && currentRound.teams) {
         store.setItem(key, JSON.stringify(currentRound.teams));
         return currentRound.teams;
-      }
-      // Fallback 2: busca da rodada mais recente no histórico que possua times
-      const rounds = this.getRounds();
-      if (rounds && rounds.length > 0) {
-        const latestWithTeams = rounds.find(r => r.teams && (r.teams.team1 || r.teams.team_1));
-        if (latestWithTeams) {
-          store.setItem(key, JSON.stringify(latestWithTeams.teams));
-          return latestWithTeams.teams;
-        }
       }
       return null;
     } catch {
@@ -1745,10 +1837,11 @@ export const Storage = {
 
         if (this.currentFutebol && currentRound.id) {
           const futId = this.currentFutebol.id;
-          supabase.from('rodadas')
-            .update({ teams: teams, updated_at: new Date().toISOString() })
-            .eq('id', currentRound.id)
-            .catch(err => console.warn('[Storage] Erro ao sincronizar times na rodada:', err));
+          Promise.resolve(
+            supabase.from('rodadas')
+              .update({ teams: teams, updated_at: new Date().toISOString() })
+              .eq('id', currentRound.id)
+          ).catch(err => console.warn('[Storage] Erro ao sincronizar times na rodada:', err));
 
           if (teams) {
             this._syncRelationalTeams(futId, currentRound.id, teams).catch(() => {});
@@ -1863,6 +1956,7 @@ export const Storage = {
     this.assertAdmin('Iniciar noite');
     const round = this.getCurrentRound();
     if (!round) throw new Error('Crie uma rodada antes de iniciar a noite.');
+    if (round.status === 'FINISHED') throw new Error('Esta noite já foi encerrada. O status FINISHED é definitivo.');
     if (!round.teams) throw new Error('Realize o sorteio dos 4 times antes de iniciar.');
 
     round.status = 'ACTIVE';
@@ -2056,13 +2150,21 @@ export const Storage = {
     const round = this.getCurrentRound();
     if (!round) throw new Error('Nenhuma rodada ativa encontrada.');
 
-    // Se houver partida ao vivo com status running/paused ou isActive,
-    // finaliza a partida ao vivo para não bloquear o encerramento da noite
+    // Idempotência: se já estiver FINISHED, não executa novamente
+    if (round.status === 'FINISHED') {
+      return true;
+    }
+
+    // Regra: Bloquear se houver partida em andamento (RUNNING ou PAUSED)
     const live = this.getLiveMatch();
-    if (live && (live.isActive || live.status === 'running' || live.status === 'paused')) {
-      live.isActive = false;
-      live.status = 'finished';
-      this.saveLiveMatch(live);
+    if (live) {
+      const liveStatus = live.status || (live.isActive ? (live.isPaused ? 'paused' : 'running') : 'ready');
+      if (liveStatus === 'running' || (live.isActive && !live.isPaused)) {
+        throw new Error('Finalize a partida em andamento antes de encerrar a noite.');
+      }
+      if (liveStatus === 'paused' || live.isPaused) {
+        throw new Error('Retome e finalize a partida antes de encerrar a noite.');
+      }
     }
 
     const championTeamId = options.championTeamId || round.campeaoTimeId;
@@ -2116,7 +2218,7 @@ export const Storage = {
         draw_info: round.drawInfo || null,
         created_at: round.createdAt || new Date().toISOString()
       };
-      await supabase.from('rodadas').upsert([dbRound], { onConflict: 'id' }).catch(() => {});
+      await Promise.resolve(supabase.from('rodadas').upsert([dbRound], { onConflict: 'id' })).catch(() => {});
 
       if (capaPlayers.length > 0) {
         const capaRows = capaPlayers.map(p => ({
@@ -2127,7 +2229,7 @@ export const Storage = {
           time_id: championTeamId,
           created_at: new Date().toISOString()
         }));
-        await supabase.from('capas').upsert(capaRows, { onConflict: 'rodada_id,jogador_id' }).catch(() => {});
+        await Promise.resolve(supabase.from('capas').upsert(capaRows, { onConflict: 'rodada_id,jogador_id' })).catch(() => {});
       }
     }
 
@@ -2139,10 +2241,21 @@ export const Storage = {
     const round = this.getCurrentRound();
     if (!round) throw new Error('Nenhuma rodada ativa encontrada.');
 
-    // Regra: Bloquear se houver partida em andamento
+    // Idempotência: se já estiver FINISHED, não executa novamente nem altera nada
+    if (round.status === 'FINISHED') {
+      return true;
+    }
+
+    // Regra: Bloquear se houver partida em andamento (RUNNING ou PAUSED)
     const live = this.getLiveMatch();
-    if (live && (live.isActive || live.status === 'running' || live.status === 'paused')) {
-      throw new Error('Não é possível encerrar a noite com uma partida em andamento. Finalize a partida atual.');
+    if (live) {
+      const liveStatus = live.status || (live.isActive ? (live.isPaused ? 'paused' : 'running') : 'ready');
+      if (liveStatus === 'running' || (live.isActive && !live.isPaused)) {
+        throw new Error('Finalize a partida em andamento antes de encerrar a noite.');
+      }
+      if (liveStatus === 'paused' || live.isPaused) {
+        throw new Error('Retome e finalize a partida antes de encerrar a noite.');
+      }
     }
 
     const allMatches = this.getMatches();
@@ -2195,6 +2308,18 @@ export const Storage = {
     // Salva rodada atualizada
     this.saveCurrentRound(round);
 
+    // Atualiza partida ao vivo local para finalizada e inativa
+    if (live) {
+      live.status = 'finished';
+      live.isActive = false;
+      live.isPaused = false;
+      live.waitingNextOpponent = false;
+      live.waiting_next_opponent = false;
+      live.waitingTieNextMatch = false;
+      live.waiting_tie_next_match = false;
+      this.saveLocalMatchOnly(live);
+    }
+
     // Adiciona / atualiza no histórico permanente de rodadas
     const rounds = this.getRounds();
     const existingIdx = rounds.findIndex(r => r.id === round.id);
@@ -2220,8 +2345,8 @@ export const Storage = {
         standings_snapshot: finalStandings,
         created_at: round.createdAt || new Date().toISOString()
       };
-      supabase.from('rodadas').update(dbRound).eq('id', round.id).catch(() => {
-        supabase.from('rodadas').insert([dbRound]).catch(() => {});
+      Promise.resolve(supabase.from('rodadas').update(dbRound).eq('id', round.id)).catch(() => {
+        Promise.resolve(supabase.from('rodadas').insert([dbRound])).catch(() => {});
       });
     }
 
@@ -2332,7 +2457,7 @@ export const Storage = {
     if (this.currentFutebol) {
       const futId = this.currentFutebol.id;
       const matchDbId = match.id || Utils.generateUUID();
-      const roundId = (match.roundId && Utils.isUUID(match.roundId)) ? match.roundId : null;
+      const roundId = (match.roundId && (Utils.isUUID(match.roundId) || !SupabaseConfig.isConfigured())) ? match.roundId : null;
 
       const dbMatch = {
         id: matchDbId,
@@ -2396,49 +2521,7 @@ export const Storage = {
       const parsed = JSON.parse(data);
       if (!parsed) return null;
 
-      const base = parsed.payload && typeof parsed.payload === 'object'
-        ? { ...parsed.payload, ...parsed }
-        : parsed;
-
-      const winnerId = base.winnerTeamId || base.winner_team_id || null;
-      const winnerName = base.winnerTeamName || base.winner_team_name || null;
-      const loserId = base.loserTeamId || base.loser_team_id || null;
-      const waitingNext = Boolean(base.waitingNextOpponent !== undefined ? base.waitingNextOpponent : base.waiting_next_opponent);
-      const waitingTie = Boolean(base.waitingTieNextMatch !== undefined ? base.waitingTieNextMatch : base.waiting_tie_next_match);
-
-      return {
-        ...base,
-        order: base.order !== undefined ? base.order : (base.order_num !== undefined ? base.order_num : 1),
-        homeScore: base.homeScore !== undefined ? base.homeScore : (base.placar_casa !== undefined ? base.placar_casa : 0),
-        awayScore: base.awayScore !== undefined ? base.awayScore : (base.placar_fora !== undefined ? base.placar_fora : 0),
-        homeTeamId: base.homeTeamId || base.home_team_id || 'time_1',
-        awayTeamId: base.awayTeamId || base.away_team_id || 'time_2',
-        homeTeamName: base.homeTeamName || base.time_casa_nome || 'Time 1',
-        awayTeamName: base.awayTeamName || base.time_fora_nome || 'Time 2',
-        winnerTeamId: winnerId,
-        winner_team_id: winnerId,
-        winnerTeamName: winnerName,
-        winner_team_name: winnerName,
-        loserTeamId: loserId,
-        loser_team_id: loserId,
-        isTie: base.isTie !== undefined ? base.isTie : Boolean(base.is_tie),
-        waitingNextOpponent: waitingNext,
-        waiting_next_opponent: waitingNext,
-        waitingTieNextMatch: waitingTie,
-        waiting_tie_next_match: waitingTie,
-        tieNextMatch: base.tieNextMatch || base.tie_next_match || null,
-        lastMatchSummary: base.lastMatchSummary || base.last_match_summary || null,
-        remainingSeconds: base.remainingSeconds !== undefined ? base.remainingSeconds : (base.tempo_restante !== undefined ? base.tempo_restante : 420),
-        remainingAtStart: base.remainingAtStart !== undefined ? base.remainingAtStart : (base.remaining_at_start !== undefined ? base.remaining_at_start : (base.remainingSeconds || 420)),
-        durationMinutes: base.durationMinutes || (base.duration_seconds ? Math.floor(base.duration_seconds / 60) : 7),
-        durationSeconds: base.durationSeconds || (base.durationMinutes ? base.durationMinutes * 60 : (base.duration_seconds || 420)),
-        isActive: base.isActive !== undefined ? base.isActive : Boolean(base.is_active),
-        isPaused: base.isPaused !== undefined ? base.isPaused : Boolean(base.is_paused),
-        status: base.status || (base.is_active ? (base.is_paused ? 'paused' : 'running') : (base.isActive ? (base.isPaused ? 'paused' : 'running') : 'ready')),
-        startedAt: base.startedAt || base.started_at || null,
-        pausedAt: base.pausedAt || base.paused_at || null,
-        goals: base.goals || base.gols || []
-      };
+      return this._normalizeLiveMatchData(parsed, parsed.payload);
     } catch {
       return null;
     }
@@ -2458,20 +2541,29 @@ export const Storage = {
   },
 
   saveLocalMatchOnly(liveData) {
-    this._saveLocalLiveMatch(liveData);
+    const normalized = liveData ? this._normalizeLiveMatchData(liveData, liveData.payload) : null;
+    this._saveLocalLiveMatch(normalized);
   },
 
   saveLiveMatch(liveData) {
     this.assertAdmin('Atualizar partida ao vivo');
+    const round = this.getCurrentRound();
+    if (round && round.status === 'FINISHED') {
+      const liveStatus = liveData ? (liveData.status || (liveData.isActive ? (liveData.isPaused ? 'paused' : 'running') : 'ready')) : 'ready';
+      if (liveStatus === 'running' || liveStatus === 'paused' || (liveData && (liveData.isActive || liveData.isPaused))) {
+        throw new Error('Esta noite já foi encerrada. Não é possível iniciar uma nova partida.');
+      }
+    }
     try {
-      this._saveLocalLiveMatch(liveData);
-      this._emitChange('liveMatch', liveData);
-      this._emitChange('liveMatchUpdate', liveData);
+      const normalized = liveData ? this._normalizeLiveMatchData(liveData, liveData.payload) : null;
+      this._saveLocalLiveMatch(normalized);
+      this._emitChange('liveMatch', normalized);
+      this._emitChange('liveMatchUpdate', normalized);
 
       if (this.currentFutebol && supabase && typeof supabase.from === 'function') {
         const futId = this.currentFutebol.id;
         let p;
-        if (!liveData) {
+        if (!normalized) {
           const resetRow = {
             futebol_id: futId,
             status: 'ready',
@@ -2488,55 +2580,34 @@ export const Storage = {
           };
           p = supabase.from('partida_ao_vivo').upsert([resetRow], { onConflict: 'futebol_id' });
         } else {
-          const remainingSecs = liveData.remainingSeconds !== undefined 
-            ? liveData.remainingSeconds 
-            : (liveData.tempo_restante !== undefined ? liveData.tempo_restante : (liveData.timeRemaining !== undefined ? liveData.timeRemaining : 420));
-
-          const status = liveData.status || (liveData.isActive ? (liveData.isPaused ? 'paused' : 'running') : 'ready');
-          const winnerId = liveData.winnerTeamId || liveData.winner_team_id || null;
-          const winnerName = liveData.winnerTeamName || liveData.winner_team_name || null;
-          const loserId = liveData.loserTeamId || liveData.loser_team_id || null;
-          const waitingNext = Boolean(liveData.waitingNextOpponent !== undefined ? liveData.waitingNextOpponent : liveData.waiting_next_opponent);
-          const waitingTie = Boolean(liveData.waitingTieNextMatch !== undefined ? liveData.waitingTieNextMatch : liveData.waiting_tie_next_match);
-
           const row = {
             futebol_id: futId,
-            status: status,
-            order_num: liveData.order || 1,
-            home_team_id: liveData.homeTeamId || liveData.home_team_id || 'time_1',
-            away_team_id: liveData.awayTeamId || liveData.away_team_id || 'time_2',
-            time_casa_nome: liveData.homeTeamName || liveData.time_casa_nome || 'Time 1',
-            time_fora_nome: liveData.awayTeamName || liveData.time_fora_nome || 'Time 2',
-            placar_casa: liveData.homeScore !== undefined ? liveData.homeScore : 0,
-            placar_fora: liveData.awayScore !== undefined ? liveData.awayScore : 0,
-            tempo_restante: remainingSecs,
-            is_active: Boolean(liveData.isActive !== undefined ? liveData.isActive : (status === 'running' || status === 'paused')),
-            is_paused: Boolean(liveData.isPaused !== undefined ? liveData.isPaused : (status === 'paused')),
-            winner_team_id: winnerId,
-            winner_team_name: winnerName,
-            loser_team_id: loserId,
-            is_tie: Boolean(liveData.isTie !== undefined ? liveData.isTie : liveData.is_tie),
-            waiting_next_opponent: waitingNext,
-            waiting_tie_next_match: waitingTie,
-            tie_next_match: liveData.tieNextMatch || liveData.tie_next_match || null,
-            last_match_summary: liveData.lastMatchSummary || liveData.last_match_summary || null,
-            started_at: liveData.startedAt || liveData.started_at || null,
-            paused_at: liveData.pausedAt || liveData.paused_at || null,
-            duration_seconds: liveData.durationSeconds || (liveData.durationMinutes ? liveData.durationMinutes * 60 : 420),
-            remaining_at_start: liveData.remainingAtStart !== undefined ? liveData.remainingAtStart : remainingSecs,
-            elapsed_seconds: liveData.elapsedSeconds || 0,
-            gols: liveData.goals || liveData.gols || [],
-            payload: {
-              ...liveData,
-              winnerTeamId: winnerId,
-              winner_team_id: winnerId,
-              winnerTeamName: winnerName,
-              winner_team_name: winnerName,
-              loserTeamId: loserId,
-              loser_team_id: loserId,
-              waitingNextOpponent: waitingNext,
-              waiting_next_opponent: waitingNext
-            },
+            status: normalized.status,
+            order_num: normalized.order,
+            home_team_id: normalized.homeTeamId,
+            away_team_id: normalized.awayTeamId,
+            time_casa_nome: normalized.homeTeamName,
+            time_fora_nome: normalized.awayTeamName,
+            placar_casa: normalized.homeScore,
+            placar_fora: normalized.awayScore,
+            tempo_restante: normalized.remainingSeconds,
+            is_active: normalized.isActive,
+            is_paused: normalized.isPaused,
+            winner_team_id: normalized.winnerTeamId,
+            winner_team_name: normalized.winnerTeamName,
+            loser_team_id: normalized.loserTeamId,
+            is_tie: normalized.isTie,
+            waiting_next_opponent: normalized.waitingNextOpponent,
+            waiting_tie_next_match: normalized.waitingTieNextMatch,
+            tie_next_match: normalized.tieNextMatch,
+            last_match_summary: normalized.lastMatchSummary,
+            started_at: normalized.startedAt,
+            paused_at: normalized.pausedAt,
+            duration_seconds: normalized.durationSeconds,
+            remaining_at_start: (liveData && liveData.remainingAtStart !== undefined) ? liveData.remainingAtStart : normalized.remainingSeconds,
+            elapsed_seconds: (liveData && liveData.elapsedSeconds) || 0,
+            gols: normalized.goals,
+            payload: normalized,
             updated_at: new Date().toISOString()
           };
           p = supabase.from('partida_ao_vivo').upsert([row], { onConflict: 'futebol_id' });
@@ -2545,9 +2616,12 @@ export const Storage = {
         const promise = p.then(({ error }) => {
           if (error) {
             console.warn('[Storage] Erro ao sincronizar partida ao vivo:', error);
-            throw error;
+            return false;
           }
           return true;
+        }).catch(err => {
+          console.warn('[Storage] Erro de rede ao sincronizar partida ao vivo:', err);
+          return false;
         });
 
         // Previne unhandled rejection para chamadores síncronos
@@ -2581,24 +2655,24 @@ export const Storage = {
           total_estrelas: team.totalStars || 0
         };
 
-        await supabase.from('times').upsert([teamRow], { onConflict: 'id' }).catch(() => {});
+        await Promise.resolve(supabase.from('times').upsert([teamRow], { onConflict: 'id' })).catch(() => {});
 
         if (Array.isArray(team.players)) {
           for (const player of team.players) {
             if (!player || !player.id) continue;
             const pId = Utils.isUUID(player.id) ? player.id : null;
             if (pId) {
-              await supabase.from('time_jogadores').upsert([{
+              await Promise.resolve(supabase.from('time_jogadores').upsert([{
                 time_id: teamRow.id,
                 jogador_id: pId,
                 futebol_id: futebolId
-              }], { onConflict: 'time_id,jogador_id' }).catch(() => {});
+              }], { onConflict: 'time_id,jogador_id' })).catch(() => {});
 
-              await supabase.from('rodada_jogadores').upsert([{
+              await Promise.resolve(supabase.from('rodada_jogadores').upsert([{
                 rodada_id: roundId,
                 jogador_id: pId,
                 futebol_id: futebolId
-              }], { onConflict: 'rodada_id,jogador_id' }).catch(() => {});
+              }], { onConflict: 'rodada_id,jogador_id' })).catch(() => {});
             }
           }
         }
@@ -2618,21 +2692,63 @@ export const Storage = {
   },
 
   // ============================================================================
-  // RESET DE DADOS DO FUTEBOL ATUAL
+  // RESET DE DADOS OPERACIONAIS DO FUTEBOL ATUAL ("ZERAR TUDO")
+  // Zera todos os dados operacionais (rodadas, partidas, gols, capas, etc).
+  // PRESERVA INTEGRALMENTE O CADASTRO DE JOGADORES (nomes, IDs, atributos).
   // ============================================================================
-  resetAll() {
-    this.assertAdmin('Resetar dados do futebol');
-    try {
-      const keys = [
-        'players', 'selected_players', 'team_colors', 'rounds',
-        'current_round', 'teams', 'draw_info', 'matches', 'live_match', 'capas', 'rodada_classificacao'
-      ];
-      keys.forEach(k => store.removeItem(this._getScopedKey(k)));
-      this._emitChange('reset', null);
-      return true;
-    } catch (e) {
-      throw e;
+  async resetAll() {
+    this.assertAdmin('Zerar todos os dados operacionais');
+    const fut = this.currentFutebol;
+    if (!fut) throw new Error('Nenhum futebol ativo para zerar.');
+    const futId = fut.id;
+
+    // 1. Limpeza local imediata de dados operacionais
+    // IMPORTANTE: 'players' NUNCA é removido — cadastro preservado 100%!
+    const operationalKeys = [
+      'selected_players',
+      'team_colors',
+      'rounds',
+      'current_round',
+      'teams',
+      'draw_info',
+      'matches',
+      'live_match',
+      'capas',
+      'rodada_classificacao',
+      'current_match'
+    ];
+    operationalKeys.forEach(k => store.removeItem(this._getScopedKey(k)));
+
+    // 2. Apagar dados operacionais no Supabase em ordem segura de chaves estrangeiras:
+    // (A tabela 'jogadores' NUNCA participa do DELETE)
+    if (supabase && typeof supabase.from === 'function') {
+      try {
+        await supabase.from('gols').delete().eq('futebol_id', futId);
+        await supabase.from('partidas').delete().eq('futebol_id', futId);
+        await supabase.from('partida_ao_vivo').delete().eq('futebol_id', futId);
+        await supabase.from('time_jogadores').delete().eq('futebol_id', futId);
+        await supabase.from('times').delete().eq('futebol_id', futId);
+        await supabase.from('rodada_jogadores').delete().eq('futebol_id', futId);
+        await supabase.from('capas').delete().eq('futebol_id', futId);
+        await supabase.from('rodada_classificacao').delete().eq('futebol_id', futId);
+        await supabase.from('rodadas').delete().eq('futebol_id', futId);
+      } catch (err) {
+        console.warn('[Storage] Erro ao deletar dados operacionais no Supabase:', err);
+      }
     }
+
+    // 3. Notificar todos os módulos do sistema
+    this._emitChange('reset', null);
+    this._emitChange('rounds', []);
+    this._emitChange('currentRound', null);
+    this._emitChange('teams', null);
+    this._emitChange('matches', []);
+    this._emitChange('capas', []);
+    this._emitChange('liveMatch', null);
+    this._emitChange('liveMatchUpdate', null);
+    this._emitChange('standingsSnapshot', null);
+
+    return true;
   },
 
   _listeners: [],

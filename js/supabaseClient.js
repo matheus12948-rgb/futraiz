@@ -481,6 +481,9 @@ class LocalSupabaseEngine {
         } catch (e) {
           return resolve({ data: null, error: { message: e.message } });
         }
+      },
+      catch(reject) {
+        return this.then(null, reject);
       }
     };
   }

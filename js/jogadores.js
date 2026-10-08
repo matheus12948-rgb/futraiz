@@ -19,7 +19,7 @@ export const Jogadores = {
 
     // Reatividade: re-renderiza quando jogadores forem alterados ou sincronizados do Supabase
     Storage.onChange((type) => {
-      if (type === 'players' || type === 'authChanged' || type === 'publicFutebolLoaded') {
+      if (type === 'players' || type === 'authChanged' || type === 'publicFutebolLoaded' || type === 'reset') {
         this.render();
       }
     });
