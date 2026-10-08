@@ -22,7 +22,7 @@ export const Programacao = {
     this.bindEvents();
 
     Storage.onChange((type) => {
-      if (['schedule', 'currentRound', 'teams', 'newRound', 'nightStarted', 'nightFinalized'].includes(type)) {
+      if (['schedule', 'currentRound', 'teams', 'teamNameUpdated', 'newRound', 'nightStarted', 'nightFinalized'].includes(type)) {
         this.loadSchedule();
         this.render();
       }

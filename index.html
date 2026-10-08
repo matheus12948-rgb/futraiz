@@ -1282,6 +1282,27 @@
     </div>
   </div>
 
+  <!-- Modal Personalizar Nome do Time -->
+  <div class="modal" id="modal-edit-team-name" role="dialog" aria-modal="true" aria-labelledby="modal-edit-team-title">
+    <div class="modal-backdrop" id="modal-edit-team-backdrop"></div>
+    <div class="modal-card modal-edit-team-card">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-edit-team-title">NOME DO TIME</h3>
+        <button type="button" class="btn-close" id="btn-close-edit-team-modal" data-close aria-label="Fechar">
+          <svg class="i" aria-hidden="true"><use href="#i-x" /></svg>
+        </button>
+      </div>
+      <div class="modal-body" style="padding: 1.25rem 1rem;">
+        <label for="input-edit-team-name" style="display: block; font-size: 0.82rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; margin-bottom: 0.5rem;" id="modal-edit-team-label">Time 1</label>
+        <input type="text" id="input-edit-team-name" class="form-control" maxlength="20" placeholder="Ex: Os Brabos" style="width: 100%; box-sizing: border-box; font-size: 1rem; padding: 0.65rem 0.85rem;" autocomplete="off" />
+        <span id="edit-team-name-error" style="display: none; color: #ef4444; font-size: 0.82rem; margin-top: 0.4rem; font-weight: 600;"></span>
+      </div>
+      <div class="modal-footer" style="display: flex; gap: 0.75rem; justify-content: flex-end; padding: 0.75rem 1rem;">
+        <button type="button" class="btn btn-secondary btn-sm" id="btn-cancel-edit-team" data-close>CANCELAR</button>
+        <button type="button" class="btn btn-primary btn-sm" id="btn-save-edit-team">SALVAR</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Aplicação -->
   <script type="module" src="./js/app.js"></script>

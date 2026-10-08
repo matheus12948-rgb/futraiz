@@ -16,6 +16,11 @@ import { Utils } from './utils.js';
 export const Tabela = {
   init() {
     this.render();
+    Storage.onChange((type) => {
+      if (['currentRound', 'teams', 'teamNameUpdated', 'matches', 'liveMatchUpdate', 'reset', 'newRound'].includes(type)) {
+        this.render();
+      }
+    });
   },
 
   /**
@@ -232,6 +237,7 @@ export const Tabela = {
     const standings = this.calcularTabelaRodada();
     const tiedAtTop = this.detectTieAtTop(standings);
     const colors = Storage.getTeamColors();
+    const storedTeams = Storage.getTeams() || (round && round.teams ? round.teams : {}) || {};
 
     const tieAlertHtml = tiedAtTop ? `
       <div class="alert alert-warning" style="margin-bottom: 1rem; padding: 0.75rem 1rem; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; color: #f59e0b; display: flex; align-items: flex-start; gap: 0.5rem;">
@@ -327,6 +333,8 @@ export const Tabela = {
               const homeColor = m.homeTeamColor || colors[m.homeTeamId] || '#3b82f6';
               const awayColor = m.awayTeamColor || colors[m.awayTeamId] || '#ef4444';
               const matchTime = m.time || (m.createdAt ? Utils.formatTime(new Date(m.createdAt)) : '');
+              const homeName = (storedTeams && storedTeams[m.homeTeamId]?.name) || m.homeTeamName || 'Time 1';
+              const awayName = (storedTeams && storedTeams[m.awayTeamId]?.name) || m.awayTeamName || 'Time 2';
               return `
                 <div class="match-mini-card">
                   <div class="match-mini-header">
@@ -336,12 +344,12 @@ export const Tabela = {
                   <div class="match-mini-score">
                     <div class="mini-team">
                       <span class="dot" style="background-color: ${homeColor};"></span>
-                      <span>${m.homeTeamName}</span>
+                      <span>${homeName}</span>
                     </div>
                     <span class="mini-result"><strong>${m.homeScore}</strong> × <strong>${m.awayScore}</strong></span>
                     <div class="mini-team">
                       <span class="dot" style="background-color: ${awayColor};"></span>
-                      <span>${m.awayTeamName}</span>
+                      <span>${awayName}</span>
                     </div>
                   </div>
                 </div>

@@ -394,9 +394,12 @@ Storage._store = global.localStorage;
   Dashboard.render();
 
   assert(statusLabel.textContent === 'NOITE ENCERRADA', '9.1', 'Status exibe "NOITE ENCERRADA"');
-  assert(heroBox.innerHTML.includes('NOITE ENCERRADA'), '9.2', 'Hero exibe card NOITE ENCERRADA');
-  assert(heroBox.innerHTML.includes('CAMPEÃO: Time 1'), '9.3', 'Hero declara Time 1 como campeão');
-  assert(heroBox.innerHTML.includes('+1 Capa'), '9.4', 'Hero menciona premiação de Capas');
+  assert(heroBox.innerHTML.includes('NOITE ENCERRADA'), '9.2', 'Hero exibe indicação NOITE ENCERRADA');
+  assert(heroBox.innerHTML.includes('dash-night-finished-strip'), '9.3', 'Hero exibe indicação compacta dash-night-finished-strip');
+  assert(!heroBox.innerHTML.includes('dash-night-finished-hero'), '9.4', 'NÃO exibe card grande antigo dash-night-finished-hero');
+  assert(!heroBox.innerHTML.includes('CAMPEÃO:'), '9.4b', 'Hero compacto NÃO exibe bloco de Campeão');
+  assert(!heroBox.innerHTML.includes('+1 Capa'), '9.4c', 'Hero compacto NÃO exibe mensagem de Capas');
+  assert(heroBox.classList.contains('dash-hero-finished-compact'), '9.4d', 'Hero box possui classe compacta para remover espaçamento vertical');
   assert(!heroBox.innerHTML.includes('AGUARDANDO PRÓXIMA PARTIDA'), '9.5', 'NÃO exibe partida aguardando início após noite encerrada');
   assert(!heroBox.innerHTML.includes('somente leitura'), '9.6', 'NÃO exibe texto "somente leitura"');
 

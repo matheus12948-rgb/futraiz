@@ -449,22 +449,30 @@ export const Historico = {
           Partidas Realizadas (${roundMatches.length})
         </h4>
         <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-          ${roundMatches.map((m, mIdx) => `
+          ${roundMatches.map((m, mIdx) => {
+            const roundTeams = round.teams || {};
+            const homeName = (roundTeams[m.homeTeamId] && roundTeams[m.homeTeamId].name) || m.homeTeamName || 'Time 1';
+            const awayName = (roundTeams[m.awayTeamId] && roundTeams[m.awayTeamId].name) || m.awayTeamName || 'Time 2';
+            return `
             <div style="padding: 0.75rem; background: var(--surface-2); border-radius: 6px;">
               <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem;">
                 <span>PARTIDA ${String(m.matchOrder || (mIdx + 1)).padStart(2, '0')}</span>
                 <strong style="font-size: 1rem;">
-                  ${m.homeTeamName} ${m.homeScore} × ${m.awayScore} ${m.awayTeamName}
+                  ${homeName} ${m.homeScore} × ${m.awayScore} ${awayName}
                 </strong>
                 <span class="badge" style="font-size: 0.75rem;">${m.resultText}</span>
               </div>
               ${m.goals && m.goals.length > 0 ? `
                 <div style="margin-top: 0.4rem; padding-top: 0.4rem; border-top: 1px solid var(--border); font-size: 0.8rem; color: var(--text-dim);">
-                  ${m.goals.map(g => `${g.minuteFormatted} ${g.playerName} (${g.teamName})`).join(' · ')}
+                  ${m.goals.map(g => {
+                    const tName = (roundTeams[g.teamId] && roundTeams[g.teamId].name) || g.teamName;
+                    return `${g.minuteFormatted} ${g.playerName} (${tName})`;
+                  }).join(' · ')}
                 </div>
               ` : ''}
             </div>
-          `).join('')}
+          `;
+          }).join('')}
         </div>
       </div>
     `;

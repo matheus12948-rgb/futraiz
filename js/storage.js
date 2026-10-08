@@ -766,6 +766,10 @@ export const Storage = {
               const finishedRound = rounds.find(r => r.id === curRound.id);
               if (finishedRound) {
                 store.setItem(this._getScopedKey('current_round'), JSON.stringify(finishedRound));
+                if (finishedRound.teams) {
+                  store.setItem(this._getScopedKey('teams'), JSON.stringify(finishedRound.teams));
+                  this._emitChange('teams', finishedRound.teams);
+                }
                 this._emitChange('currentRound', finishedRound);
                 this._emitChange('nightFinalized', finishedRound);
               }
@@ -1854,6 +1858,198 @@ export const Storage = {
     } catch (e) {
       throw e;
     }
+  },
+
+  async updateTeamName(teamId, newName) {
+    this.assertAdmin('Alterar nome do time');
+    if (!teamId) {
+      throw new Error('ID do time inválido.');
+    }
+    if (typeof newName !== 'string') {
+      throw new Error('Nome do time deve ser um texto.');
+    }
+    const trimmed = newName.trim();
+    if (!trimmed) {
+      throw new Error('O nome do time não pode ser vazio.');
+    }
+    if (trimmed.length > 20) {
+      throw new Error('O nome do time deve ter no máximo 20 caracteres.');
+    }
+
+    const teams = this.getTeams();
+    if (!teams) {
+      throw new Error('Nenhum time encontrado para a rodada atual.');
+    }
+
+    // Identifica a chave interna do time (time_1, time_2, time_3, time_4)
+    let key = teamId;
+    if (!teams[key]) {
+      const foundKey = Object.keys(teams).find(k => k === teamId || teams[k].id === teamId);
+      if (foundKey) key = foundKey;
+    }
+    if (!teams[key]) {
+      throw new Error(`Time ${teamId} não encontrado.`);
+    }
+
+    const currentName = teams[key].name || '';
+    if (currentName === trimmed) {
+      return { changed: false, name: currentName };
+    }
+
+    const oldName = currentName;
+    // IMPORTANTE: Altera estritamente o NOME EXIBIDO.
+    // team.id, players, estrelas, cores permanecem 100% INTACTOS!
+    teams[key].name = trimmed;
+
+    // 1. Persistência local dos times (sem violar trava de composição da noite)
+    const teamsStorageKey = this._getScopedKey('teams');
+    store.setItem(teamsStorageKey, JSON.stringify(teams));
+
+    // 2. Atualiza na rodada atual
+    const currentRound = this.getCurrentRound();
+    if (currentRound) {
+      if (!currentRound.teams) currentRound.teams = {};
+      currentRound.teams = teams;
+
+      // Resumo do sorteio
+      if (currentRound.drawInfo && Array.isArray(currentRound.drawInfo.teamsSummary)) {
+        currentRound.drawInfo.teamsSummary.forEach(s => {
+          if (s.name === oldName || s.id === key) {
+            s.name = trimmed;
+          }
+        });
+      }
+
+      // Programação oficial
+      if (Array.isArray(currentRound.programacao)) {
+        currentRound.programacao.forEach(f => {
+          if (f.homeTeamId === key) f.homeTeamName = trimmed;
+          if (f.awayTeamId === key) f.awayTeamName = trimmed;
+        });
+      }
+
+      // Campeão da rodada se este time foi o campeão
+      if (currentRound.campeaoTimeId === key || currentRound.campeao_time_id === key) {
+        currentRound.campeaoTimeNome = trimmed;
+        currentRound.campeao_time_nome = trimmed;
+      }
+
+      // Snapshot congelado da classificação se a rodada já tiver sido finalizada
+      if (Array.isArray(currentRound.standingsSnapshot)) {
+        currentRound.standingsSnapshot.forEach(row => {
+          if (row.id === key) row.name = trimmed;
+        });
+      }
+
+      store.setItem(this._getScopedKey('current_round'), JSON.stringify(currentRound));
+
+      // Atualiza também no array de rodadas se a rodada já estiver arquivada nele
+      const rounds = this.getRounds();
+      const rIdx = rounds.findIndex(r => r.id === currentRound.id);
+      if (rIdx !== -1) {
+        rounds[rIdx] = { ...currentRound };
+        store.setItem(this._getScopedKey('rounds'), JSON.stringify(rounds));
+      }
+    }
+
+    // 3. Atualiza histórico de partidas desta rodada para refletir o novo nome exibido
+    const matches = this.getMatches();
+    let matchesUpdated = false;
+    if (matches && matches.length > 0) {
+      matches.forEach(m => {
+        const belongsToRound = !currentRound || m.roundId === currentRound.id || (!m.roundId && m.dateKey === currentRound.dateKey);
+        if (belongsToRound) {
+          if (m.homeTeamId === key) { m.homeTeamName = trimmed; matchesUpdated = true; }
+          if (m.awayTeamId === key) { m.awayTeamName = trimmed; matchesUpdated = true; }
+          if (Array.isArray(m.goals)) {
+            m.goals.forEach(g => {
+              if (g.teamId === key) { g.teamName = trimmed; matchesUpdated = true; }
+            });
+          }
+        }
+      });
+      if (matchesUpdated) {
+        store.setItem(this._getScopedKey('matches'), JSON.stringify(matches));
+        this._emitChange('matches', matches);
+      }
+    }
+
+    // 4. Atualiza partida ao vivo se o time estiver em campo
+    const live = this.getLiveMatch();
+    if (live) {
+      let liveChanged = false;
+      if (live.homeTeamId === key) { live.homeTeamName = trimmed; liveChanged = true; }
+      if (live.awayTeamId === key) { live.awayTeamName = trimmed; liveChanged = true; }
+      if (live.winnerTeamId === key) { live.winnerTeamName = trimmed; liveChanged = true; }
+      if (liveChanged) {
+        store.setItem(this._getScopedKey('live_match'), JSON.stringify(live));
+        this._emitChange('liveMatch', live);
+        this._emitChange('liveMatchUpdate', live);
+      }
+    }
+
+    // 5. Sincronização com Supabase (Fonte de Verdade Oficial)
+    if (this.currentFutebol && currentRound && currentRound.id) {
+      const futId = this.currentFutebol.id;
+      const roundId = currentRound.id;
+
+      // 5.1 Atualiza tabela rodadas
+      const roundUpdate = {
+        teams: teams,
+        updated_at: new Date().toISOString()
+      };
+      if (currentRound.programacao) roundUpdate.programacao = currentRound.programacao;
+      if (currentRound.campeaoTimeNome) roundUpdate.campeao_time_nome = currentRound.campeaoTimeNome;
+      if (currentRound.standingsSnapshot) roundUpdate.standings_snapshot = currentRound.standingsSnapshot;
+
+      await Promise.resolve(
+        supabase.from('rodadas')
+          .update(roundUpdate)
+          .eq('id', roundId)
+      ).catch(err => console.warn('[Storage] Erro ao sincronizar nome em rodadas:', err));
+
+      // 5.2 Atualiza tabela times (por rodada_id e numero)
+      const teamNum = parseInt(key.replace(/\D/g, ''), 10) || 1;
+      await Promise.resolve(
+        supabase.from('times')
+          .update({ nome: trimmed })
+          .eq('rodada_id', roundId)
+          .eq('numero', teamNum)
+      ).catch(err => console.warn('[Storage] Erro ao sincronizar nome em times:', err));
+
+      // 5.3 Atualiza partidas realizadas no Supabase
+      await Promise.all([
+        supabase.from('partidas')
+          .update({ time_casa_nome: trimmed })
+          .eq('rodada_id', roundId)
+          .eq('time_casa_id', key),
+        supabase.from('partidas')
+          .update({ time_fora_nome: trimmed })
+          .eq('rodada_id', roundId)
+          .eq('time_fora_id', key)
+      ]).catch(() => {});
+
+      // 5.4 Atualiza partida_ao_vivo se o time estiver em campo
+      if (live) {
+        const liveUpdate = {};
+        if (live.homeTeamId === key) liveUpdate.time_casa_nome = trimmed;
+        if (live.awayTeamId === key) liveUpdate.time_fora_nome = trimmed;
+        if (Object.keys(liveUpdate).length > 0) {
+          await Promise.resolve(
+            supabase.from('partida_ao_vivo')
+              .update(liveUpdate)
+              .eq('futebol_id', futId)
+          ).catch(() => {});
+        }
+      }
+    }
+
+    // 6. Notificações do sistema
+    this._emitChange('teams', teams);
+    this._emitChange('currentRound', currentRound);
+    this._emitChange('teamNameUpdated', { teamId: key, oldName, newName: trimmed });
+
+    return { changed: true, name: trimmed };
   },
 
   getDrawInfo() {

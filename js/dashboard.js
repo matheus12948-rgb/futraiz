@@ -30,6 +30,7 @@ export const Dashboard = {
         'currentRound',
         'selectedPlayers',
         'teams',
+        'teamNameUpdated',
         'capas',
         'nightFinalized',
         'reset',
@@ -380,35 +381,10 @@ export const Dashboard = {
 
     // CASO 1: NOITE ENCERRADA (FINISHED)
     if (currentRound && currentRound.status === 'FINISHED') {
-      const standings = Tabela.calcularTabelaRodada();
-      const champion = standings.length > 0 ? standings[0].name : 'CAMPEÃO';
       return `
-        <div class="card dash-hero-card dash-night-finished-hero">
-          <div class="dash-hero-badge-row">
-            <span class="badge status-finished">
-              <svg class="i i-sm" aria-hidden="true"><use href="#i-crown"/></svg>
-              <span>NOITE ENCERRADA</span>
-            </span>
-          </div>
-          <div class="dash-finished-center">
-            <div class="dash-finished-trophy">
-              <svg class="i" style="width: 2.4rem; height: 2.4rem; color: #eab308;" aria-hidden="true"><use href="#i-crown"/></svg>
-            </div>
-            <div class="dash-finished-info">
-              <h2 class="dash-finished-title">CAMPEÃO: ${champion}</h2>
-              <p class="dash-finished-desc">Os 5 atletas campeões receberam +1 Capa no ranking permanente.</p>
-            </div>
-          </div>
-          <div class="dash-hero-actions">
-            <button type="button" class="btn btn-secondary btn-sm" data-screen="historico">
-              <svg class="i i-sm" aria-hidden="true"><use href="#i-history"/></svg>
-              <span>Ver Histórico da Noite</span>
-            </button>
-            <button type="button" class="btn btn-secondary btn-sm" data-screen="tabela">
-              <svg class="i i-sm" aria-hidden="true"><use href="#i-table"/></svg>
-              <span>Ver Tabela Final</span>
-            </button>
-          </div>
+        <div class="dash-night-finished-strip">
+          <svg class="i i-sm" aria-hidden="true"><use href="#i-crown"/></svg>
+          <span>NOITE ENCERRADA</span>
         </div>
       `;
     }
@@ -828,6 +804,11 @@ export const Dashboard = {
     // 3. Renderizar Partida Atual / Estado Hero
     const heroBox = document.getElementById('dash-hero-match-box');
     if (heroBox) {
+      if (currentRound && currentRound.status === 'FINISHED') {
+        heroBox.classList.add('dash-hero-finished-compact');
+      } else {
+        heroBox.classList.remove('dash-hero-finished-compact');
+      }
       heroBox.innerHTML = this.renderHeroMatchSection(currentRound, teams, liveMatch, roundMatches);
     }
 

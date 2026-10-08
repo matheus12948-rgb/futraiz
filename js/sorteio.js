@@ -22,7 +22,7 @@ export const Sorteio = {
     this.render();
 
     Storage.onChange((type) => {
-      if (['currentRound', 'teams', 'selectedPlayers', 'newRound', 'players', 'reset'].includes(type)) {
+      if (['currentRound', 'teams', 'teamNameUpdated', 'selectedPlayers', 'newRound', 'players', 'reset'].includes(type)) {
         this.restoreSelection();
         this.render();
       }
@@ -133,6 +133,50 @@ export const Sorteio = {
         }
       });
     }
+
+    // Modal de Edição de Nome do Time
+    const btnSaveTeamName = document.getElementById('btn-save-edit-team');
+    if (btnSaveTeamName) {
+      btnSaveTeamName.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.salvarNomeTime();
+      });
+    }
+
+    const inputTeamName = document.getElementById('input-edit-team-name');
+    if (inputTeamName) {
+      inputTeamName.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          this.salvarNomeTime();
+        } else if (e.key === 'Escape') {
+          Utils.closeModal('modal-edit-team-name');
+        }
+      });
+    }
+
+    const btnCancelTeamName = document.getElementById('btn-cancel-edit-team');
+    if (btnCancelTeamName) {
+      btnCancelTeamName.addEventListener('click', (e) => {
+        e.preventDefault();
+        Utils.closeModal('modal-edit-team-name');
+      });
+    }
+
+    const btnCloseTeamModal = document.getElementById('btn-close-edit-team-modal');
+    if (btnCloseTeamModal) {
+      btnCloseTeamModal.addEventListener('click', (e) => {
+        e.preventDefault();
+        Utils.closeModal('modal-edit-team-name');
+      });
+    }
+
+    const backdropTeamModal = document.getElementById('modal-edit-team-backdrop');
+    if (backdropTeamModal) {
+      backdropTeamModal.addEventListener('click', () => {
+        Utils.closeModal('modal-edit-team-name');
+      });
+    }
   },
 
   handleColorChange(teamId, colorHex) {
@@ -162,6 +206,10 @@ export const Sorteio = {
   },
 
   getTeamDisplayName(teamId) {
+    const teams = Storage.getTeams();
+    if (teams && teams[teamId] && teams[teamId].name) {
+      return teams[teamId].name;
+    }
     const names = {
       time_1: 'Time 1',
       time_2: 'Time 2',
@@ -169,6 +217,98 @@ export const Sorteio = {
       time_4: 'Time 4'
     };
     return names[teamId] || teamId;
+  },
+
+  openEditTeamNameModal(teamId) {
+    if (Storage.isPublicViewer()) return;
+    this._editingTeamId = teamId;
+    const teams = Storage.getTeams() || {};
+    const currentTeam = teams[teamId];
+    const defaultLabel = teamId.replace('_', ' ').toUpperCase();
+    const currentName = currentTeam ? currentTeam.name : (teamId === 'time_1' ? 'Time 1' : teamId === 'time_2' ? 'Time 2' : teamId === 'time_3' ? 'Time 3' : 'Time 4');
+
+    const labelEl = document.getElementById('modal-edit-team-label');
+    if (labelEl) labelEl.textContent = defaultLabel;
+
+    const inputEl = document.getElementById('input-edit-team-name');
+    if (inputEl) {
+      inputEl.value = currentName;
+      inputEl.classList.remove('is-invalid');
+    }
+
+    const errEl = document.getElementById('edit-team-name-error');
+    if (errEl) {
+      errEl.textContent = '';
+      errEl.style.display = 'none';
+    }
+
+    Utils.openModal('modal-edit-team-name');
+    if (inputEl) {
+      setTimeout(() => {
+        inputEl.focus();
+        inputEl.select();
+      }, 80);
+    }
+  },
+
+  async salvarNomeTime() {
+    const teamId = this._editingTeamId;
+    if (!teamId) return;
+
+    const inputEl = document.getElementById('input-edit-team-name');
+    const errEl = document.getElementById('edit-team-name-error');
+    const saveBtn = document.getElementById('btn-save-edit-team');
+
+    const rawValue = inputEl ? inputEl.value : '';
+    const trimmed = rawValue.trim();
+
+    if (!trimmed) {
+      if (errEl) {
+        errEl.textContent = 'O nome do time não pode ficar vazio.';
+        errEl.style.display = 'block';
+      }
+      if (inputEl) inputEl.focus();
+      return;
+    }
+
+    if (trimmed.length > 20) {
+      if (errEl) {
+        errEl.textContent = 'O nome deve ter no máximo 20 caracteres.';
+        errEl.style.display = 'block';
+      }
+      if (inputEl) inputEl.focus();
+      return;
+    }
+
+    const teams = Storage.getTeams() || {};
+    const currentName = teams[teamId] ? teams[teamId].name : '';
+    if (trimmed === currentName) {
+      Utils.closeModal('modal-edit-team-name');
+      return;
+    }
+
+    try {
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'SALVANDO...';
+      }
+      await Storage.updateTeamName(teamId, trimmed);
+      Utils.toast(`Nome atualizado para "${trimmed}"!`, 'success', 3000);
+      Utils.closeModal('modal-edit-team-name');
+      this.render();
+    } catch (err) {
+      if (errEl) {
+        errEl.textContent = err.message || 'Erro ao salvar nome.';
+        errEl.style.display = 'block';
+      } else {
+        Utils.toast(err.message, 'error', 4000);
+      }
+    } finally {
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'SALVAR';
+      }
+    }
   },
 
   // Alterna a seleção de um atleta com regra estrita de no máximo 20
@@ -421,7 +561,9 @@ export const Sorteio = {
     const teamsPanel = document.getElementById('round-teams-panel');
     if (teamsPanel) {
       setTimeout(() => {
-        teamsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (typeof teamsPanel.scrollIntoView === 'function') {
+          teamsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
       }, 200);
     }
   },
@@ -615,10 +757,10 @@ export const Sorteio = {
             <span class="badge-status" style="font-size: 0.85rem;">Diferença máx: ${drawInfo.difference} ★</span>
           </div>
           <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-            <span class="badge-status" style="border-left: 3px solid ${colors.time_1};">Time 1: <strong>${teams.time_1.totalStars} ★</strong></span>
-            <span class="badge-status" style="border-left: 3px solid ${colors.time_2};">Time 2: <strong>${teams.time_2.totalStars} ★</strong></span>
-            <span class="badge-status" style="border-left: 3px solid ${colors.time_3};">Time 3: <strong>${teams.time_3.totalStars} ★</strong></span>
-            <span class="badge-status" style="border-left: 3px solid ${colors.time_4};">Time 4: <strong>${teams.time_4.totalStars} ★</strong></span>
+            <span class="badge-status" style="border-left: 3px solid ${colors.time_1};">${teams.time_1.name}: <strong>${teams.time_1.totalStars} ★</strong></span>
+            <span class="badge-status" style="border-left: 3px solid ${colors.time_2};">${teams.time_2.name}: <strong>${teams.time_2.totalStars} ★</strong></span>
+            <span class="badge-status" style="border-left: 3px solid ${colors.time_3};">${teams.time_3.name}: <strong>${teams.time_3.totalStars} ★</strong></span>
+            <span class="badge-status" style="border-left: 3px solid ${colors.time_4};">${teams.time_4.name}: <strong>${teams.time_4.totalStars} ★</strong></span>
           </div>
         </div>
       `;
@@ -636,12 +778,22 @@ export const Sorteio = {
             return `
               <div class="team-drawn-card">
                 <div class="team-card-banner" style="border-left: 4px solid ${teamColor};">
-                  <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${teamColor};"></span>
-                    <h3 class="team-card-title">${team.name}</h3>
+                  <div style="display: flex; align-items: center; gap: 0.5rem; flex: 1; min-width: 0;">
+                    <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${teamColor}; flex-shrink: 0;"></span>
+                    <div style="min-width: 0; flex: 1;">
+                      <div style="display: flex; align-items: center; gap: 0.35rem; line-height: 1;">
+                        <span class="team-card-number-label" style="font-size: 0.72rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px;">TIME ${idx + 1}</span>
+                        ${Storage.isPublicViewer() ? '' : `
+                          <button type="button" class="btn-edit-team-name" data-team-id="${teamId}" title="Editar nome do time" aria-label="Editar nome do time">
+                            <svg class="i" aria-hidden="true"><use href="#i-edit"/></svg>
+                          </button>
+                        `}
+                      </div>
+                      <h3 class="team-card-title" style="margin: 0.15rem 0 0 0; font-size: 1.15rem; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${team.name}">${team.name}</h3>
+                    </div>
                   </div>
 
-                  <div style="display: flex; align-items: center; gap: 0.5rem;">
+                  <div style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0;">
                     <span class="team-stars-badge" title="Total de estrelas do time">
                       ${team.totalStars} ★
                     </span>
@@ -677,12 +829,12 @@ export const Sorteio = {
           </div>
           <div style="padding: 1.25rem; text-align: center;">
             <div style="font-size: 1.4rem; font-weight: 800; font-family: 'Barlow Condensed', sans-serif; letter-spacing: 0.5px;">
-              <span style="color: var(--color-team-1, #2563eb);">TIME 1</span>
+              <span style="color: var(--color-team-1, #2563eb);">${teams.time_1.name.toUpperCase()}</span>
               <span style="margin: 0 1rem; color: var(--text-muted);">×</span>
-              <span style="color: var(--color-team-2, #dc2626);">TIME 2</span>
+              <span style="color: var(--color-team-2, #dc2626);">${teams.time_2.name.toUpperCase()}</span>
             </div>
             <p style="margin: 0.75rem auto 1.25rem; font-size: 0.85rem; color: var(--text-muted); max-width: 480px;">
-              A primeira partida é obrigatoriamente Time 1 x Time 2. O time vencedor permanecerá em campo e o administrador escolherá o próximo adversário.
+              A primeira partida é obrigatoriamente ${teams.time_1.name} × ${teams.time_2.name}. O time vencedor permanecerá em campo e o administrador escolherá o próximo adversário.
             </p>
             <button type="button" class="btn btn-primary" id="btn-ir-primeira-partida" style="width: 100%; max-width: 280px; margin: 0 auto; display: inline-flex; justify-content: center; align-items: center; gap: 0.5rem;">
               <span>IR PARA A PARTIDA 01</span>
@@ -696,6 +848,15 @@ export const Sorteio = {
         input.addEventListener('change', (e) => {
           const teamId = e.target.dataset.team;
           this.handleColorChange(teamId, e.target.value);
+        });
+      });
+
+      container.querySelectorAll('.btn-edit-team-name').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const teamId = btn.dataset.teamId;
+          if (teamId) this.openEditTeamNameModal(teamId);
         });
       });
 

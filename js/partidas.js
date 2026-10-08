@@ -75,6 +75,13 @@ export const Partidas = {
       }
       if (type === 'liveMatchUpdate') {
         this.handleLiveUpdate(data);
+      } else if (type === 'teamNameUpdated') {
+        const teams = Storage.getTeams() || {};
+        if (teams[this.state.homeTeamId]) this.state.homeTeamName = teams[this.state.homeTeamId].name;
+        if (teams[this.state.awayTeamId]) this.state.awayTeamName = teams[this.state.awayTeamId].name;
+        this.renderScoreboard();
+        this.renderQuemGanhaFicaBanner();
+        this.renderGoalsList();
       } else if (['currentRound', 'teams', 'newRound', 'nightFinalized', 'matches', 'reset'].includes(type)) {
         if (type !== 'nightFinalized' && type !== 'reset' && (this.state.status === 'running' || this.state.status === 'paused')) {
           const round = Storage.getCurrentRound();

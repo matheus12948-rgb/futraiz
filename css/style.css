@@ -1134,10 +1134,53 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   color: var(--text-main);
 }
 
-/* Estado: Noite Encerrada Hero */
+/* Estado: Noite Encerrada Hero (Legado/Compatibilidade) */
 .dash-night-finished-hero {
   border-left: 4px solid #eab308;
   background: linear-gradient(135deg, #0B192A 0%, #1a1e12 100%);
+}
+
+/* Estado: Noite Encerrada Compacta no Dashboard */
+.dash-night-finished-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.45rem 1rem;
+  background: rgba(234, 179, 8, 0.08);
+  border: 1px solid rgba(234, 179, 8, 0.25);
+  border-radius: var(--radius-md, 8px);
+  color: #facc15;
+  font-family: var(--font-heading, 'Barlow Condensed', sans-serif);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.dash-night-finished-strip svg {
+  color: #facc15;
+  width: 1.1rem;
+  height: 1.1rem;
+  flex-shrink: 0;
+}
+
+.dash-hero-match-box.dash-hero-finished-compact {
+  margin-bottom: 0.75rem;
+}
+
+@media (max-width: 640px) {
+  .dash-night-finished-strip {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.85rem;
+    gap: 0.4rem;
+  }
+  .dash-hero-match-box.dash-hero-finished-compact {
+    margin-bottom: 0.65rem;
+  }
 }
 
 .dash-night-finished-hero .dash-hero-badge-row {
@@ -3959,4 +4002,44 @@ body.role-public-viewer .admin-only {
   border-color: #eab308;
   box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.25);
 }
+
+/* ==========================================================================
+   PERSONALIZAÇÃO DE NOMES DOS TIMES
+   ========================================================================== */
+.btn-edit-team-name {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-dim, #94a3b8);
+  cursor: pointer;
+  padding: 3px;
+  border-radius: var(--radius-sm, 6px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast, 0.15s ease);
+  line-height: 1;
+}
+
+.btn-edit-team-name:hover {
+  color: var(--primary, #3b82f6);
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.25);
+}
+
+.btn-edit-team-name:active {
+  transform: scale(0.92);
+}
+
+.btn-edit-team-name svg {
+  width: 13px;
+  height: 13px;
+  fill: currentColor;
+}
+
+.modal-edit-team-card {
+  max-width: 380px;
+  width: min(380px, calc(100vw - 32px));
+  margin: auto;
+}
+
 
