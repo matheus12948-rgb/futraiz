@@ -2404,20 +2404,28 @@ export const Partidas = {
 
     summaryEl.style.display = 'flex';
 
+    const renderBalls = (count, color) => {
+      const ballSvg = `<svg class="i i-xs sb-scorer-ball" aria-hidden="true" style="color: ${color};"><use href="#i-ball"/></svg>`;
+      if (count <= 4) {
+        return ballSvg.repeat(count);
+      }
+      return `${ballSvg}<span class="sb-scorer-mult" style="color: ${color};">&times;${count}</span>`;
+    };
+
     homeScorersEl.innerHTML = homeList.map(item => `
-      <span class="sb-scorer-badge" style="border-color: ${homeColor}40;">
-        <svg class="i i-xs" aria-hidden="true" style="color: ${homeColor};"><use href="#i-ball"/></svg>
+      <div class="sb-scorer-line sb-scorer-badge" data-player="${item.name}" data-count="${item.count}" title="${item.name}: ${item.count} ${item.count === 1 ? 'gol' : 'gols'}">
         <span class="sb-scorer-name">${item.name}</span>
-        ${item.count > 1 ? `<span class="sb-scorer-count" style="background: ${homeColor}30; color: #fff;">${item.count}</span>` : ''}
-      </span>
+        <span class="sb-scorer-balls" aria-hidden="true">${renderBalls(item.count, homeColor)}</span>
+        <span class="sb-scorer-count-val" style="display: none;" aria-hidden="true">${item.count}</span>
+      </div>
     `).join('');
 
     awayScorersEl.innerHTML = awayList.map(item => `
-      <span class="sb-scorer-badge" style="border-color: ${awayColor}40;">
-        <svg class="i i-xs" aria-hidden="true" style="color: ${awayColor};"><use href="#i-ball"/></svg>
+      <div class="sb-scorer-line sb-scorer-badge" data-player="${item.name}" data-count="${item.count}" title="${item.name}: ${item.count} ${item.count === 1 ? 'gol' : 'gols'}">
         <span class="sb-scorer-name">${item.name}</span>
-        ${item.count > 1 ? `<span class="sb-scorer-count" style="background: ${awayColor}30; color: #fff;">${item.count}</span>` : ''}
-      </span>
+        <span class="sb-scorer-balls" aria-hidden="true">${renderBalls(item.count, awayColor)}</span>
+        <span class="sb-scorer-count-val" style="display: none;" aria-hidden="true">${item.count}</span>
+      </div>
     `).join('');
   },
 
