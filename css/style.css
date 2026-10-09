@@ -1257,28 +1257,38 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   margin-top: 0.5rem;
 }
 
-/* C. Grid de Resumo da Rodada (4 Cards) */
+/* C. Grid de Resumo da Rodada — Barra Unificada de Métricas (Design Minimalista) */
 .dash-stats-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 1rem;
+  gap: 0;
   margin-bottom: 1.25rem;
-}
-
-.dash-stats-grid .stat-card {
   background: #0B192A;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.dash-stats-grid .stat-card {
+  background: transparent !important;
+  border: none !important;
+  border-right: 1px solid var(--border-subtle) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
   padding: 0.9rem 1.1rem;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  transition: transform 0.2s ease, border-color 0.2s ease;
+  transition: background-color 0.2s ease;
+}
+
+.dash-stats-grid .stat-card:last-child {
+  border-right: none !important;
 }
 
 .dash-stats-grid .stat-card:hover {
-  border-color: rgba(16, 185, 129, 0.4);
-  transform: translateY(-2px);
+  background-color: rgba(255, 255, 255, 0.02) !important;
+  transform: none !important;
 }
 
 .dash-stats-grid .stat-label {
@@ -1359,10 +1369,10 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 }
 
 .dash-chart-subcard {
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 0.85rem;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0.25rem 0;
 }
 
 .dash-chart-subhead {
@@ -1678,10 +1688,11 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 }
 
 .dash-destaque-card {
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 0.75rem 0.85rem;
+  background: rgba(16, 185, 129, 0.03);
+  border: none;
+  border-left: 3px solid var(--primary);
+  border-radius: 0;
+  padding: 0.5rem 0.75rem;
   display: flex;
   flex-direction: column;
 }

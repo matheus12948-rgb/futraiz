@@ -336,7 +336,7 @@ async function runTests() {
 
   let matchBlocked = false;
   try {
-    Storage.addMatch({ id: 'mat_fake', homeScore: 9, awayScore: 0 });
+    await Storage.addMatch({ id: 'mat_fake', homeScore: 9, awayScore: 0 });
   } catch (err) {
     matchBlocked = true;
   }

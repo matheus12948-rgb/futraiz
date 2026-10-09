@@ -634,6 +634,7 @@ export const Storage = {
         .eq('futebol_id', futebolId)
         .order('created_at', { ascending: false });
 
+      if (this._isResetting) return;
       if (dbMatches && Array.isArray(dbMatches)) {
         const localMatches = this.getMatches();
         const mapped = dbMatches.map(dbMatch => {
@@ -663,10 +664,11 @@ export const Storage = {
             ...(existing && existing.awayPlayers ? { awayPlayers: existing.awayPlayers } : {})
           };
         });
+
         const key = this._getScopedKey('matches');
         mapped.sort((a, b) => {
-          const ordA = a.matchOrder || a.ordem || 0;
-          const ordB = b.matchOrder || b.ordem || 0;
+          const ordA = a.matchOrder || a.ordem || a.order || 0;
+          const ordB = b.matchOrder || b.ordem || b.order || 0;
           if (ordB !== ordA) return ordB - ordA;
           return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
         });
@@ -1755,7 +1757,8 @@ export const Storage = {
 
           supabase.from('rodadas').upsert([dbRound], { onConflict: 'id' }).then(() => {
             if (round.teams) {
-              this._syncRelationalTeams(futId, round.id, round.teams).catch(() => {});
+              this._pendingSyncTeams = this._syncRelationalTeams(futId, round.id, round.teams);
+              this._pendingSyncTeams.catch(() => {});
             }
           }).catch(err => {
             console.warn('[Storage] Erro ao sincronizar rodada no Supabase:', err);
@@ -1848,7 +1851,8 @@ export const Storage = {
           ).catch(err => console.warn('[Storage] Erro ao sincronizar times na rodada:', err));
 
           if (teams) {
-            this._syncRelationalTeams(futId, currentRound.id, teams).catch(() => {});
+            this._pendingSyncTeams = this._syncRelationalTeams(futId, currentRound.id, teams);
+            this._pendingSyncTeams.catch(() => {});
           }
         }
       }
@@ -2640,13 +2644,18 @@ export const Storage = {
     }
   },
 
-  addMatch(match) {
+  async addMatch(match) {
     this.assertAdmin('Adicionar partida ao histórico');
     if (!match.id) {
       match.id = Utils.generateUUID();
     }
     const matches = this.getMatches();
-    matches.unshift(match);
+    const existingIndex = matches.findIndex(m => m.id === match.id);
+    if (existingIndex >= 0) {
+      matches[existingIndex] = { ...matches[existingIndex], ...match };
+    } else {
+      matches.unshift(match);
+    }
     this.saveMatches(matches);
 
     // Sincroniza com Supabase
@@ -2670,7 +2679,8 @@ export const Storage = {
         created_at: match.createdAt || new Date().toISOString()
       };
 
-      supabase.from('partidas').upsert([dbMatch], { onConflict: 'id' }).then(() => {
+      try {
+        await supabase.from('partidas').upsert([dbMatch], { onConflict: 'id' });
         if (Array.isArray(match.goals) && match.goals.length > 0) {
           const dbGoals = match.goals.map(g => ({
             id: (g.id && Utils.isUUID(g.id)) ? g.id : Utils.generateUUID(),
@@ -2684,13 +2694,15 @@ export const Storage = {
           })).filter(g => g.jogador_id !== null);
 
           if (dbGoals.length > 0) {
-            Promise.resolve(supabase.from('gols').upsert(dbGoals, { onConflict: 'id' })).catch(err => console.warn('Sync gols:', err));
+            await supabase.from('gols').upsert(dbGoals, { onConflict: 'id' });
           }
         }
-      }).catch(err => console.warn('Sync partida:', err));
+      } catch (err) {
+        console.warn('Sync partida:', err);
+      }
     }
 
-    return this.saveMatches(matches);
+    return true;
   },
 
   updateMatch(updatedMatch) {
@@ -2832,17 +2844,24 @@ export const Storage = {
     }
   },
 
+  _syncGeneration: 0,
+  _pendingSyncTeams: null,
+
   async _syncRelationalTeams(futebolId, roundId, teams) {
     if (!futebolId || !roundId || !teams || typeof teams !== 'object') return;
+    const currentGen = ++this._syncGeneration;
     try {
       const teamKeys = Object.keys(teams);
       for (let i = 0; i < teamKeys.length; i++) {
+        if (this._syncGeneration !== currentGen || !this.currentFutebol || this.currentFutebol.id !== futebolId) {
+          return;
+        }
         const teamKey = teamKeys[i];
         const team = teams[teamKey];
         if (!team) continue;
         const num = i + 1;
         const teamRow = {
-          id: team.id && Utils.isUUID(team.id) ? team.id : Utils.generateUUID(),
+          id: team.id && Utils.isUUID(team.id) ? team.id : (team.dbId && Utils.isUUID(team.dbId) ? team.dbId : Utils.generateUUID()),
           futebol_id: futebolId,
           rodada_id: roundId,
           numero: num,
@@ -2850,11 +2869,14 @@ export const Storage = {
           cor: team.color || DEFAULT_COLORS[teamKey] || '#3b82f6',
           total_estrelas: team.totalStars || 0
         };
+        team.dbId = teamRow.id;
 
+        if (this._syncGeneration !== currentGen || !this.currentFutebol || this.currentFutebol.id !== futebolId) return;
         await Promise.resolve(supabase.from('times').upsert([teamRow], { onConflict: 'id' })).catch(() => {});
 
         if (Array.isArray(team.players)) {
           for (const player of team.players) {
+            if (this._syncGeneration !== currentGen || !this.currentFutebol || this.currentFutebol.id !== futebolId) return;
             if (!player || !player.id) continue;
             const pId = Utils.isUUID(player.id) ? player.id : null;
             if (pId) {
@@ -2898,39 +2920,56 @@ export const Storage = {
     if (!fut) throw new Error('Nenhum futebol ativo para zerar.');
     const futId = fut.id;
 
-    // 1. Limpeza local imediata de dados operacionais
-    // IMPORTANTE: 'players' NUNCA é removido — cadastro preservado 100%!
-    const operationalKeys = [
-      'selected_players',
-      'team_colors',
-      'rounds',
-      'current_round',
-      'teams',
-      'draw_info',
-      'matches',
-      'live_match',
-      'capas',
-      'rodada_classificacao',
-      'current_match'
-    ];
-    operationalKeys.forEach(k => store.removeItem(this._getScopedKey(k)));
-
-    // 2. Apagar dados operacionais no Supabase em ordem segura de chaves estrangeiras:
-    // (A tabela 'jogadores' NUNCA participa do DELETE)
-    if (supabase && typeof supabase.from === 'function') {
-      try {
-        await supabase.from('gols').delete().eq('futebol_id', futId);
-        await supabase.from('partidas').delete().eq('futebol_id', futId);
-        await supabase.from('partida_ao_vivo').delete().eq('futebol_id', futId);
-        await supabase.from('time_jogadores').delete().eq('futebol_id', futId);
-        await supabase.from('times').delete().eq('futebol_id', futId);
-        await supabase.from('rodada_jogadores').delete().eq('futebol_id', futId);
-        await supabase.from('capas').delete().eq('futebol_id', futId);
-        await supabase.from('rodada_classificacao').delete().eq('futebol_id', futId);
-        await supabase.from('rodadas').delete().eq('futebol_id', futId);
-      } catch (err) {
-        console.warn('[Storage] Erro ao deletar dados operacionais no Supabase:', err);
+    this._isResetting = true;
+    try {
+      // Cancela e aguarda qualquer sincronização relacional pendente
+      this._syncGeneration = (this._syncGeneration || 0) + 1;
+      if (this._pendingSyncTeams) {
+        try {
+          await this._pendingSyncTeams;
+        } catch {}
+        this._pendingSyncTeams = null;
       }
+
+      // 1. Limpeza local imediata de dados operacionais
+      // IMPORTANTE: 'players' NUNCA é removido — cadastro preservado 100%!
+      const operationalKeys = [
+        'selected_players',
+        'team_colors',
+        'rounds',
+        'current_round',
+        'teams',
+        'draw_info',
+        'matches',
+        'live_match',
+        'capas',
+        'rodada_classificacao',
+        'current_match'
+      ];
+      operationalKeys.forEach(k => store.removeItem(this._getScopedKey(k)));
+
+      // 2. Apagar dados operacionais no Supabase em ordem segura de chaves estrangeiras:
+      // (A tabela 'jogadores' NUNCA participa do DELETE)
+      if (supabase && typeof supabase.from === 'function') {
+        try {
+          await supabase.from('gols').delete().eq('futebol_id', futId);
+          await supabase.from('partidas').delete().eq('futebol_id', futId);
+          await supabase.from('partida_ao_vivo').delete().eq('futebol_id', futId);
+          await supabase.from('time_jogadores').delete().eq('futebol_id', futId);
+          await supabase.from('times').delete().eq('futebol_id', futId);
+          await supabase.from('rodada_jogadores').delete().eq('futebol_id', futId);
+          await supabase.from('capas').delete().eq('futebol_id', futId);
+          await supabase.from('rodada_classificacao').delete().eq('futebol_id', futId);
+          await supabase.from('rodadas').delete().eq('futebol_id', futId);
+        } catch (err) {
+          console.warn('[Storage] Erro ao deletar dados operacionais no Supabase:', err);
+        }
+      }
+
+      // Reafirma a remoção local para assegurar consistência estrita
+      operationalKeys.forEach(k => store.removeItem(this._getScopedKey(k)));
+    } finally {
+      this._isResetting = false;
     }
 
     // 3. Notificar todos os módulos do sistema

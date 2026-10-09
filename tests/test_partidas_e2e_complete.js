@@ -142,10 +142,12 @@ async function run() {
   console.log('--- SETUP: Criando Futebol, 20 Atletas e Sorteio de 4 Equipes ---');
   const futInfo = await client.eval(`
     (async () => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
       const res = await window.Storage.createFutebol({
         nome: 'Futebol E2E Partidas',
         adminNome: 'Administrador Real',
-        email: 'admin@e2epartidas.com',
+        email: 'admin_' + Date.now() + '@e2epartidas.com',
         password: 'senhaSegura123'
       });
 
@@ -400,7 +402,7 @@ async function run() {
   console.log('\n--- EXECUTANDO TESTE SUPABASE REALTIME: ADMIN x PÚBLICO ---');
   // Navega para novo confronto no Admin e inicia
   await client.eval(`
-    window.Partidas.selectMatchup('time_3', 'time_4', 1);
+    window.Partidas.selecionarProximoAdversario('time_3');
     window.Partidas.startOrResumeMatch();
   `);
   await sleep(800);
@@ -423,14 +425,14 @@ async function run() {
   `);
 
   assert(
-    publicDeviceCheck.status === 'running' && publicDeviceCheck.homeTeam === 'Time 3',
+    publicDeviceCheck.status === 'running' && publicDeviceCheck.homeTeam === 'Time 1',
     'REALTIME 1',
     `Dispositivo Público recebeu partida em andamento: ${publicDeviceCheck.homeTeam} x ${publicDeviceCheck.awayTeam} (Status: ${publicDeviceCheck.status})`
   );
 
-  // Admin registra gol no Time 3
+  // Admin registra gol no Time 1
   await client.eval(`
-    window.Partidas.registrarGol('time_3', 'ply_1', 'Craque 1');
+    window.Partidas.registrarGol('time_1', 'ply_1', 'Craque 1');
   `);
   await sleep(500);
 

@@ -268,6 +268,8 @@ class LocalSupabaseEngine {
       },
 
       async then(resolve, reject) {
+        resolve = typeof resolve === 'function' ? resolve : (v => v);
+        reject = typeof reject === 'function' ? reject : (e => { throw e; });
         try {
           // --- OPERAÇÃO 1: INSERT OU UPSERT ---
           if (this._operation === 'INSERT' || this._operation === 'UPSERT') {
@@ -483,7 +485,7 @@ class LocalSupabaseEngine {
         }
       },
       catch(reject) {
-        return this.then(null, reject);
+        return new Promise((res, rej) => this.then(res, rej)).catch(reject);
       }
     };
   }

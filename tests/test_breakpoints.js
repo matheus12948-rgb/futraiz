@@ -19,8 +19,9 @@ async function getWsUrl(port) {
           res.on('end', () => resolve(JSON.parse(body)));
         }).on('error', reject);
       });
-      if (data && data[0] && data[0].webSocketDebuggerUrl) {
-        return data[0].webSocketDebuggerUrl;
+      if (data && Array.isArray(data)) {
+        const page = data.find(t => t.type === 'page' && t.webSocketDebuggerUrl) || data.find(t => t.webSocketDebuggerUrl);
+        if (page && page.webSocketDebuggerUrl) return page.webSocketDebuggerUrl;
       }
     } catch (e) {}
     await sleep(300);
@@ -92,12 +93,13 @@ async function runBreakpointTests() {
   const outDir = path.join(__dirname, 'screenshots_breakpoints');
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir);
 
+  const tempDir = path.join(__dirname, '.temp_edge_bp_' + Date.now());
   const edgeProc = spawn(edgePath, [
     '--remote-debugging-port=9228',
     '--headless=new',
     '--disable-gpu',
     '--no-first-run',
-    '--user-data-dir=' + path.join(__dirname, '.temp_edge_audit_bp2'),
+    '--user-data-dir=' + tempDir,
     'http://localhost:3000'
   ]);
 
@@ -106,18 +108,29 @@ async function runBreakpointTests() {
     const client = new CdpClient(wsUrl);
     await client.connect();
     await client.send('Page.enable');
+    await client.send('Runtime.enable');
+    await client.send('Page.navigate', { url: 'http://localhost:3000' });
     await sleep(1500);
+
+    for (let i = 0; i < 50; i++) {
+      const ready = await client.eval('Boolean(window.App && (window.StorageApp || window.Storage || window.FutStorage))');
+      if (ready) break;
+      await sleep(200);
+    }
 
     // Setup session and sample data
     await client.eval(`
       (async () => {
         window.localStorage.clear();
-        const st = window.StorageApp || window.FutStorage;
+        window.sessionStorage.clear();
+        window.confirm = () => true;
+        window.alert = () => {};
+        const st = window.StorageApp || window.Storage || window.FutStorage;
         if (st && st.createFutebol) {
           await st.createFutebol({
             nome: 'FutRoda Oficial',
             adminNome: 'Matheus Silva',
-            email: 'admin@futroda.com',
+            email: 'admin_' + Date.now() + '@futroda.com',
             password: 'senhaSegura123'
           });
           Jogadores.loadDemoPlayers();
@@ -250,6 +263,7 @@ async function runBreakpointTests() {
     client.close();
   } finally {
     try { edgeProc.kill('SIGKILL'); } catch {}
+    try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
   }
 }
 

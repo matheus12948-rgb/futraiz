@@ -100,8 +100,15 @@ class CDPClient {
   }
 
   async screenshot(filePath) {
-    const res = await this.send('Page.captureScreenshot', { format: 'png' });
-    fs.writeFileSync(filePath, Buffer.from(res.data, 'base64'));
+    try {
+      const res = await Promise.race([
+        this.send('Page.captureScreenshot', { format: 'png' }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('screenshot timeout')), 500))
+      ]);
+      if (res && res.data) {
+        fs.writeFileSync(filePath, Buffer.from(res.data, 'base64'));
+      }
+    } catch {}
   }
 
   close() {

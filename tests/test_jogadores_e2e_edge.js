@@ -141,12 +141,15 @@ async function run() {
   console.log('--- 1. Autenticando e Acessando Futebol ---');
   await client.eval(`
     (async () => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
       await window.Storage.createFutebol({
         nome: 'Futebol E2E Jogadores',
         adminNome: 'Administrador E2E',
-        email: 'e2e_jogadores@futraiz.com',
+        email: 'e2e_jogadores_' + Date.now() + '@futraiz.com',
         password: 'senhaSegura123'
       });
+      window.Storage.savePlayers([]);
       window.App.navigateTo('jogadores');
     })()
   `);

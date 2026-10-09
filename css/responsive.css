@@ -359,20 +359,40 @@ img, svg {
     max-width: 100% !important;
   }
 
-  /* Grid de Resumo da Rodada (2x2 no mobile) */
+  /* Grid de Resumo da Rodada (Barra Unificada 2x2 no mobile) */
   .dash-stats-grid {
     display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    gap: 0.65rem !important;
+    gap: 0 !important;
     margin-bottom: 1rem !important;
     width: 100% !important;
     max-width: 100% !important;
+    background: #0B192A !important;
+    border: 1px solid var(--border-subtle) !important;
+    border-radius: var(--radius-md) !important;
+    overflow: hidden !important;
   }
 
   .dash-stats-grid .stat-card {
     padding: 0.75rem 0.85rem !important;
     min-width: 0 !important;
     overflow: hidden !important;
+    background: transparent !important;
+    border: none !important;
+    border-right: 1px solid var(--border-subtle) !important;
+    border-bottom: 1px solid var(--border-subtle) !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .dash-stats-grid .stat-card:nth-child(2),
+  .dash-stats-grid .stat-card:nth-child(4) {
+    border-right: none !important;
+  }
+
+  .dash-stats-grid .stat-card:nth-child(3),
+  .dash-stats-grid .stat-card:nth-child(4) {
+    border-bottom: none !important;
   }
 
   .dash-stats-grid .stat-value {

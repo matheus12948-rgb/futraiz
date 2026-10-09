@@ -429,6 +429,7 @@ async function runTests() {
   console.log('\n================================================================');
   console.log(`BATERIA FINALIZADA COM SUCESSO: ${passedTests}/${totalTests} TESTES PASSARAM | 0 FALHARAM`);
   console.log('================================================================');
+  process.exit(0);
 }
 
 runTests().catch(err => {

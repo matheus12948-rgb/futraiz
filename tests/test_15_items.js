@@ -19,8 +19,9 @@ async function getWsUrl(port) {
           res.on('end', () => resolve(JSON.parse(body)));
         }).on('error', reject);
       });
-      if (data && data[0] && data[0].webSocketDebuggerUrl) {
-        return data[0].webSocketDebuggerUrl;
+      if (data && Array.isArray(data)) {
+        const page = data.find(t => t.type === 'page' && t.webSocketDebuggerUrl) || data.find(t => t.webSocketDebuggerUrl);
+        if (page && page.webSocketDebuggerUrl) return page.webSocketDebuggerUrl;
       }
     } catch (e) {}
     await sleep(300);
@@ -75,12 +76,13 @@ class CdpClient {
 
 async function runTest() {
   const edgePath = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
+  const tempDir = path.join(__dirname, '.temp_edge_15_' + Date.now());
   const edgeProc = spawn(edgePath, [
     '--remote-debugging-port=9229',
     '--headless=new',
     '--disable-gpu',
     '--no-first-run',
-    '--user-data-dir=' + path.join(__dirname, '.temp_edge_audit_flow'),
+    '--user-data-dir=' + tempDir,
     'http://localhost:3000'
   ]);
 
@@ -89,10 +91,12 @@ async function runTest() {
     const client = new CdpClient(wsUrl);
     await client.connect();
     await client.send('Page.enable');
+    await client.send('Runtime.enable');
+    await client.send('Page.navigate', { url: 'http://localhost:3000' });
     await sleep(1000);
 
-    for (let i = 0; i < 30; i++) {
-      const ready = await client.eval('Boolean(window.App && (window.StorageApp || window.FutStorage))');
+    for (let i = 0; i < 50; i++) {
+      const ready = await client.eval('Boolean(window.App && (window.StorageApp || window.Storage || window.FutStorage))');
       if (ready) break;
       await sleep(200);
     }
@@ -122,7 +126,10 @@ async function runTest() {
     const rLogin = await client.eval(`
       (async () => {
         window.localStorage.clear();
-        const st = window.StorageApp || window.FutStorage;
+        window.sessionStorage.clear();
+        window.confirm = () => true;
+        window.alert = () => {};
+        const st = window.StorageApp || window.Storage || window.FutStorage;
         const res = await st.createFutebol({
           nome: 'FutRoda Oficial',
           adminNome: 'Matheus',
@@ -194,6 +201,8 @@ async function runTest() {
     // 6. Rodada
     const rRodada = await client.eval(`
       (() => {
+        window.confirm = () => true;
+        window.alert = () => {};
         Jogadores.loadDemoPlayers();
         Sorteio.selecionarPrimeiros20();
         Sorteio.solicitarSorteio();
@@ -285,7 +294,7 @@ async function runTest() {
     // 12. Gols
     const rGols = await client.eval(`
       (() => {
-        const st = window.StorageApp || window.FutStorage;
+        const st = window.StorageApp || window.Storage || window.FutStorage;
         const teams = st.getTeams();
         Partidas.registrarGol('time_1', teams.time_1.players[0].id, teams.time_1.players[0].name);
         const homeScore = document.getElementById('scoreboard-home-score')?.innerText;
@@ -316,14 +325,31 @@ async function runTest() {
 
     // 14. Encerrar noite
     const rEncerrar = await client.eval(`
-      (() => {
+      (async () => {
+        window.confirm = () => true;
+        window.alert = () => {};
         Partidas.startOrResumeMatch();
         Partidas.finalizarPartida();
+        await new Promise(r => setTimeout(r, 200));
         Partidas.solicitarEncerramentoNoite();
+        await new Promise(r => setTimeout(r, 100));
         const modal = document.getElementById('modal-encerrar-noite-resumo');
         const modalOpen = modal?.classList.contains('active');
         const btnConfirm = modal?.querySelector('#btn-confirm-finalizar-noite');
-        if (btnConfirm) btnConfirm.click();
+        if (btnConfirm && !btnConfirm.disabled) {
+          btnConfirm.click();
+          for (let i = 0; i < 30; i++) {
+            await new Promise(r => setTimeout(r, 100));
+            const round = (window.StorageApp || window.FutStorage).getCurrentRound();
+            if (round?.status === 'FINISHED') {
+              return {
+                modalWasOpen: modalOpen,
+                roundStatus: round.status,
+                success: true
+              };
+            }
+          }
+        }
         const round = (window.StorageApp || window.FutStorage).getCurrentRound();
         return {
           modalWasOpen: modalOpen,
@@ -332,12 +358,12 @@ async function runTest() {
         };
       })()
     `);
-    report('14. Encerrar Noite', rEncerrar.success, `Modal aberto: ${rEncerrar.modalWasOpen}, Status rodada: ${rEncerrar.roundStatus}`);
+    report('14. Encerrar Noite', rEncerrar && rEncerrar.success, `Modal aberto: ${rEncerrar?.modalWasOpen}, Status rodada: ${rEncerrar?.roundStatus}`);
 
     // 15. Logout
     const rLogout = await client.eval(`
       (() => {
-        const st = window.StorageApp || window.FutStorage;
+        const st = window.StorageApp || window.Storage || window.FutStorage;
         st.logout();
         App.updateHeaderUI();
         App.navigateTo('landing');
@@ -358,6 +384,7 @@ async function runTest() {
     client.close();
   } finally {
     try { edgeProc.kill('SIGKILL'); } catch {}
+    try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
   }
 }
 

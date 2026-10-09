@@ -51,6 +51,24 @@ CREATE TABLE IF NOT EXISTS public.capas (
     CONSTRAINT unique_capa_rodada_jogador UNIQUE (rodada_id, jogador_id)
 );
 
+CREATE TABLE IF NOT EXISTS public.rodada_classificacao (
+    id TEXT PRIMARY KEY,
+    rodada_id UUID REFERENCES public.rodadas(id) ON DELETE CASCADE NOT NULL,
+    futebol_id UUID REFERENCES public.futebois(id) ON DELETE CASCADE NOT NULL,
+    time_id TEXT NOT NULL,
+    time_nome TEXT NOT NULL,
+    jogos INT DEFAULT 0 NOT NULL,
+    vitorias INT DEFAULT 0 NOT NULL,
+    empates INT DEFAULT 0 NOT NULL,
+    derrotas INT DEFAULT 0 NOT NULL,
+    gols_pro INT DEFAULT 0 NOT NULL,
+    gols_contra INT DEFAULT 0 NOT NULL,
+    saldo_gols INT DEFAULT 0 NOT NULL,
+    pontos INT DEFAULT 0 NOT NULL,
+    posicao INT DEFAULT 1 NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+
 -- ------------------------------------------------------------------------------
 -- 2. ATUALIZAÇÃO DA TABELA: rodadas
 -- Adiciona colunas para persistência do sorteio e elenco oficial no Supabase
@@ -126,6 +144,8 @@ CREATE INDEX IF NOT EXISTS idx_capas_futebol ON public.capas(futebol_id);
 CREATE INDEX IF NOT EXISTS idx_capas_jogador ON public.capas(jogador_id);
 CREATE INDEX IF NOT EXISTS idx_rodada_jogadores_futebol ON public.rodada_jogadores(futebol_id);
 CREATE INDEX IF NOT EXISTS idx_time_jogadores_futebol ON public.time_jogadores(futebol_id);
+CREATE INDEX IF NOT EXISTS idx_rodada_classificacao_futebol ON public.rodada_classificacao(futebol_id);
+CREATE INDEX IF NOT EXISTS idx_rodada_classificacao_rodada ON public.rodada_classificacao(rodada_id);
 
 -- ------------------------------------------------------------------------------
 -- 5. REPLICA IDENTITY FULL (Para Realtime receber payload completo em UPDATEs)
@@ -144,6 +164,7 @@ ALTER TABLE public.rodada_jogadores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.capas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.partida_ao_vivo ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.rodadas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.rodada_classificacao ENABLE ROW LEVEL SECURITY;
 
 -- ------------------------------------------------------------------------------
 -- 7. POLÍTICAS DE RLS (Preserva isolamento: público lê, apenas admin altera)
@@ -205,6 +226,20 @@ CREATE POLICY "Admin gerencia capas" ON public.capas
         )
     );
 
+-- rodada_classificacao
+DROP POLICY IF EXISTS "Publico le classificacao" ON public.rodada_classificacao;
+CREATE POLICY "Publico le classificacao" ON public.rodada_classificacao FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Admin gerencia classificacao" ON public.rodada_classificacao;
+CREATE POLICY "Admin gerencia classificacao" ON public.rodada_classificacao
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM public.futebol_admins
+            WHERE futebol_admins.futebol_id = rodada_classificacao.futebol_id
+            AND futebol_admins.user_id = auth.uid()
+        )
+    );
+
 -- ------------------------------------------------------------------------------
 -- 8. PUBLICAÇÃO SUPABASE REALTIME (Inclusão 100% idempotente)
 -- Só adiciona a tabela se ela ainda NÃO estiver na publicação supabase_realtime.
@@ -223,6 +258,7 @@ DECLARE
         'times',
         'time_jogadores',
         'rodada_jogadores',
+        'rodada_classificacao',
         'jogadores',
         'futebois'
     ];
